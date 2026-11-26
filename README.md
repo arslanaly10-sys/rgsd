@@ -42,7 +42,7 @@ Supabase project **rgs-onesite** (`fufccfjjvlnbbqtyytqn`, region ap-south-1) alr
    curl -X POST https://<your-app>.vercel.app/api/admin/seed -H "Authorization: Bearer $SEED_SECRET"
    ```
 
-The seed endpoint refuses to run on a database that already has data. Vercel's free plan runs crons once a day at most; the 5-minute workflow tick needs a paid plan, or Supabase `pg_cron` calling `/api/workflows/tick`.
+The seed endpoint refuses to run on a database that already has data. On Vercel Hobby the workflow tick (which also sends notifications) runs once a day; on Pro set it back to `*/5 * * * *` in `vercel.json`, or call `/api/workflows/tick` every 5 minutes from Supabase `pg_cron`. Functions run in `bom1` (Mumbai), next to the Supabase database.
 
 ## AI
 

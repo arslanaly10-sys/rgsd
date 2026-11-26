@@ -1,6 +1,7 @@
 {
+  "regions": ["bom1"],
   "crons": [
-    { "path": "/api/workflows/tick", "schedule": "*/5 * * * *" },
+    { "path": "/api/workflows/tick", "schedule": "17 3 * * *" },
     { "path": "/api/watchers/run", "schedule": "0 2 * * *" }
   ]
 }
