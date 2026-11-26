@@ -65,7 +65,17 @@
     "instructions": "Instructions and changes",
     "signoffs": "Client sign-offs",
     "mySignoffs": "My sign-offs",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "handover": "Handover",
+    "itp": "Inspections & tests",
+    "scaffoldTags": "Scaffold tags",
+    "findings": "Findings",
+    "corrective": "Corrective actions",
+    "checklists": "Checklist templates",
+    "hse": "HSE",
+    "documentControl": "Document control",
+    "evidence": "Photos & evidence",
+    "docreview": "Document reviews"
   },
   "kpi": {
     "activeSites": "Active sites",

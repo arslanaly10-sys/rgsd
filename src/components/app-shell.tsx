@@ -26,6 +26,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
             { href: "/ops/progress", label: n("progress"), icon: "scaffold" },
             { href: "/ops/milestones", label: n("milestones"), icon: "check" },
             { href: "/ops/dependencies", label: n("dependencies"), icon: "pin" },
+            { href: "/ops/handover", label: n("handover"), icon: "check" },
           ] },
           { label: n("customer"), items: [
             { href: "/ops/requests", label: n("requests"), icon: "inbox", badge: badges.requests },
@@ -34,8 +35,18 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
             { href: "/ops/signoffs", label: n("signoffs"), icon: "check" },
           ] },
           { label: n("quality"), items: [
-            { href: "/ops/scaffolds", label: n("inspections"), icon: "scaffold", badge: badges.overdue },
+            { href: "/ops/inspections", label: n("itp"), icon: "clipboard" },
+            { href: "/ops/scaffolds", label: n("scaffoldTags"), icon: "scaffold", badge: badges.overdue },
+            { href: "/ops/findings", label: n("findings"), icon: "inbox", badge: badges.findings },
+            { href: "/ops/corrective", label: n("corrective"), icon: "check" },
+            { href: "/ops/checklists", label: n("checklists"), icon: "doc" },
+            { href: "/ops/hse", label: n("hse"), icon: "people" },
             { href: "/ops/tasks", label: n("tasks"), icon: "clipboard", badge: badges.tasks },
+          ] },
+          { label: n("documentControl"), items: [
+            { href: "/ops/documents", label: n("documents"), icon: "doc" },
+            { href: "/ops/evidence", label: n("evidence"), icon: "pin" },
+            { href: "/ops/docreview", label: n("docreview"), icon: "check" },
           ] },
           { label: n("operations"), items: [
             { href: "/ops/fleet", label: n("fleet"), icon: "truck" },
@@ -60,13 +71,26 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
             { href: "/client/progress", label: n("progress"), icon: "scaffold" },
             { href: "/client/milestones", label: n("milestones"), icon: "check" },
             { href: "/client/dependencies", label: n("dependencies"), icon: "pin", badge: badges.clientDeps },
+            { href: "/client/handover", label: n("handover"), icon: "check" },
           ] },
           { label: n("customer"), items: [
             { href: "/client/requests", label: n("requests"), icon: "inbox" },
             { href: "/client/instructions", label: n("instructions"), icon: "doc" },
             { href: "/client/signoffs", label: n("mySignoffs"), icon: "check", badge: badges.signoffs },
           ] },
-          { label: n("quality"), items: [{ href: "/client/scaffolds", label: n("inspections"), icon: "scaffold" }] },
+          { label: n("quality"), items: [
+            { href: "/client/inspections", label: n("itp"), icon: "clipboard" },
+            { href: "/client/scaffolds", label: n("scaffoldTags"), icon: "scaffold" },
+            { href: "/client/findings", label: n("findings"), icon: "inbox" },
+            { href: "/client/corrective", label: n("corrective"), icon: "check", badge: badges.closeouts },
+            { href: "/client/checklists", label: n("checklists"), icon: "doc" },
+            { href: "/client/hse", label: n("hse"), icon: "people" },
+          ] },
+          { label: n("documentControl"), items: [
+            { href: "/client/documents", label: n("documents"), icon: "doc" },
+            { href: "/client/evidence", label: n("evidence"), icon: "pin" },
+            { href: "/client/docreview", label: n("docreview"), icon: "check", badge: badges.reviews },
+          ] },
           { label: n("commercial"), items: [{ href: "/client/billing", label: n("finance"), icon: "money" }] },
         ];
 

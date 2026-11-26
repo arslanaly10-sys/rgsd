@@ -6,6 +6,7 @@
 import { Client } from "pg";
 import { loadEnv } from "./env";
 import { seedProjects } from "./seed-projects";
+import { seedQuality } from "./seed-quality";
 
 loadEnv();
 
@@ -459,6 +460,11 @@ export async function seed(client: Client): Promise<Record<string, string>> {
     ["create_task", 1, staffAll, [], [], "Create a task or reminder"],
     ["remember", 1, staffAll, [], [], "Save client or site memory"],
     ["create_request", 1, everyone, [], [], "Log a client scaffold request"],
+    ["list_findings", 0, everyone, [], [], "Open findings and corrective actions"],
+    ["raise_finding", 1, [...staffAll, "client_admin", "client_user", "client_consultant", "client_hse"], [], [], "Record a quality or safety finding"],
+    ["hse_summary", 0, everyone, [], [], "Safety KPIs and HSE status"],
+    ["document_status", 0, everyone, [], [], "Submittals, review codes and handover documents"],
+    ["handover_status", 0, everyone, [], [], "Handover readiness checklist"],
     ["project_status", 0, everyone, [], [], "Project progress, value, dependencies and sign-offs"],
     ["my_signoffs", 0, everyone, [], [], "Items waiting for client signatures"],
     ["raise_instruction", 1, ["admin", "ops_manager", "estimator", "site_supervisor", "client_admin", "client_user", "client_consultant"], [], [], "Record a client site instruction"],
@@ -492,6 +498,8 @@ export async function seed(client: Client): Promise<Record<string, string>> {
 
   // ── Phase A: multi-service projects (waterproofing, insulation, scaffolding) ──
   await seedProjects({ db, insert, day, ts, int, org, rc, cc, sites, jobs, people });
+  // ── Phase B: quality, HSE, document control, warranties ──
+  await seedQuality({ db, insert, day, ts, org, people });
 
   // Clear audit noise from seeding.
   await db.query("delete from audit_log");

@@ -124,9 +124,39 @@ export async function runDeliveryWatcher(orgId: string) {
   });
 }
 
+/** Quality watcher: overdue corrective actions, overdue document reviews (client side), hold points waiting on the client. */
+export async function runQualityWatcher(orgId: string) {
+  return withSystem(async (db) => {
+    const week = new Date().toISOString().slice(0, 10);
+    let created = 0;
+    const late = await rows<{ id: string; ref: string; title: string; client_company_id: string; status: string }>(db,
+      "select id, ref, title, client_company_id, status from findings where org_id = $1 and status in ('open','action_planned') and coalesce(action_due, due_date) < current_date", [orgId]);
+    for (const f of late) {
+      const r = await db.query(`insert into tasks (org_id, client_company_id, title, assignee_role, due_date, priority, source, watcher, dedupe_key, entity_type, entity_id)
+        values ($1,$2,$3,'ops_manager', current_date, 'high', 'watcher', 'quality', $4, 'finding', $5) on conflict (org_id, dedupe_key) do nothing`,
+        [orgId, f.client_company_id, `${f.ref} overdue (${f.status.replace("_", " ")}): ${f.title.slice(0, 80)}`, `finding:${f.id}:${week}`, f.id]);
+      created += r.rowCount ?? 0;
+    }
+    const reviews = await rows<{ number: string; client_company_id: string; days: number }>(db,
+      `select d.number, d.client_company_id, (current_date - r.due_date)::int days from controlled_documents d join document_revisions r on r.controlled_document_id = d.id and r.rev = d.current_rev
+       where d.org_id = $1 and d.status = 'under_review' and r.due_date < current_date`, [orgId]);
+    for (const d of reviews) {
+      const r = await db.query(`insert into tasks (org_id, client_company_id, title, assignee_role, due_date, priority, source, watcher, dedupe_key) values ($1,$2,$3,'estimator', current_date, 'high', 'watcher', 'quality', $4) on conflict (org_id, dedupe_key) do nothing`,
+        [orgId, d.client_company_id, `${d.number} review is ${d.days} day(s) late on the client side: chase in writing (delays may be claimable)`, `review:${d.number}:${week}`]);
+      if (r.rowCount) await db.query("insert into notifications (org_id, client_company_id, kind, title, title_ar, link) values ($1,$2,'document_review',$3,$4,'/client/docreview')", [orgId, d.client_company_id, `${d.number} is waiting for your review (${d.days} day(s) past the target)`, `${d.number} بانتظار مراجعتكم`]);
+      created += r.rowCount ?? 0;
+    }
+    const holds = (await rows<{ n: number }>(db, "select count(*)::int n from itp_steps where org_id = $1 and status = 'awaiting_client' and inspected_at < now() - interval '1 day'", [orgId]))[0]?.n ?? 0;
+    const summary = `${late.length} overdue corrective action(s), ${reviews.length} late document review(s), ${holds} hold point(s) waiting on clients over a day; ${created} new task(s).`;
+    await db.query(`insert into agent_runs (org_id, agent, channel, status, input, output, mode, completed_at) values ($1,'inspector','cron','completed',$2,$3,'mock',now())`,
+      [orgId, JSON.stringify({ text: "Quality watcher" }), JSON.stringify({ summary, reply: summary })]);
+    return { created, summary };
+  });
+}
+
 export async function runAllWatchers() {
   const orgs = await withSystem((db) => rows<{ id: string }>(db, "select id from organizations"));
   const out = [];
-  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id), billing: await runBillingWatcher(o.id), materials: await runMaterialsWatcher(o.id), delivery: await runDeliveryWatcher(o.id) });
+  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id), billing: await runBillingWatcher(o.id), materials: await runMaterialsWatcher(o.id), delivery: await runDeliveryWatcher(o.id), quality: await runQualityWatcher(o.id) });
   return out;
 }

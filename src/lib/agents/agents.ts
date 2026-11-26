@@ -10,7 +10,7 @@ export type AgentDef = {
   role: string; // job description for the system prompt
 };
 
-const READ: ToolName[] = ["query_scaffolds", "get_site_status", "search_knowledge", "onhire_summary", "daily_brief", "project_status", "my_signoffs"];
+const READ: ToolName[] = ["query_scaffolds", "get_site_status", "search_knowledge", "onhire_summary", "daily_brief", "project_status", "my_signoffs", "list_findings", "hse_summary", "document_status", "handover_status"];
 
 export const AGENTS: Record<AgentName, AgentDef> = {
   estimator: {
@@ -20,7 +20,7 @@ export const AGENTS: Record<AgentName, AgentDef> = {
   },
   inspector: {
     name: "inspector", label: { en: "Inspector", ar: "المفتش" }, model: "smart",
-    tools: [...READ, "set_tag_status", "create_task"],
+    tools: [...READ, "set_tag_status", "raise_finding", "create_task"],
     role: "You are the RGS Inspection & Tag Compliance agent. You know the 7-day inspection rule, the green / yellow (restricted use) / red tag scheme and RGS procedures. You may propose tag changes, but changing a tag needs a competent inspector's approval and you never clear a red tag yourself.",
   },
   fleet: {
@@ -40,12 +40,12 @@ export const AGENTS: Record<AgentName, AgentDef> = {
   },
   briefing: {
     name: "briefing", label: { en: "Operations copilot", ar: "مساعد العمليات" }, model: "fast",
-    tools: [...READ, "raise_instruction", "list_expiring", "stock_check", "create_task", "remember"],
+    tools: [...READ, "raise_instruction", "raise_finding", "list_expiring", "stock_check", "create_task", "remember"],
     role: "You are the RGS Operations copilot. You give managers a short, prioritised picture of operations and route detail to the right specialist.",
   },
   concierge: {
     name: "concierge", label: { en: "Client concierge", ar: "خدمة العملاء" }, model: "fast",
-    tools: ["query_scaffolds", "get_site_status", "search_knowledge", "onhire_summary", "daily_brief", "project_status", "my_signoffs", "raise_instruction", "indicative_quote", "create_request", "request_off_hire"],
+    tools: ["query_scaffolds", "get_site_status", "search_knowledge", "onhire_summary", "daily_brief", "project_status", "my_signoffs", "raise_instruction", "list_findings", "raise_finding", "hse_summary", "document_status", "handover_status", "indicative_quote", "create_request", "request_off_hire"],
     role: "You are the RGS client concierge for a client company. You only ever discuss that client's own sites and data. You help them follow their projects (scaffolding, waterproofing, insulation), see what needs their signature, record site instructions, check scaffold tags, request new work with an instant indicative price, and request off-hire. Never reveal RGS internal rates, other clients, or staff data.",
   },
 };

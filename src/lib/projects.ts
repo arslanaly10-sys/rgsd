@@ -2,6 +2,7 @@ import "server-only";
 import type { Session } from "./auth";
 import { one, rows, withSystem, withUser, type Db } from "./db";
 import { requiredSigners, stagePct, STAGES, type ServiceLine } from "./service-lines";
+import { activateWarranties, advanceArea } from "./quality";
 
 /* Projects (contracts), delivery tracking and the client sign-off engine. Reads run under RLS as the user. */
 
@@ -171,9 +172,29 @@ async function applySignoff(db: Db, so: Signoff & { org_id: string }, status: "a
       return `Hold point released: work moves on to ${next.replace(/_/g, " ")}.`;
     }
   }
+  if ((so.kind === "hold_point" || so.kind === "inspection") && so.entity_type === "itp_step" && so.entity_id) {
+    const st = await one<{ area_id: string; project_id: string; title: string; test_kind: string | null; client_company_id: string; org_id: string; code: string }>(db,
+      "select st.area_id, st.project_id, st.title, st.test_kind, st.client_company_id, st.org_id, a.code from itp_steps st join project_areas a on a.id = st.area_id where st.id = $1", [so.entity_id]);
+    if (!st) return "";
+    if (status === "approved") {
+      await db.query("update itp_steps set status = 'passed' where id = $1", [so.entity_id]);
+      if (st.test_kind === "flood_test") await db.query("update milestones set status = 'achieved', achieved_at = current_date where project_id = $1 and status = 'pending' and name ilike '%flood test%'", [st.project_id]);
+      const before = await one<{ stage: string }>(db, "select stage from project_areas where id = $1", [st.area_id]);
+      await advanceArea(db, st.area_id);
+      const after = await one<{ stage: string }>(db, "select stage from project_areas where id = $1", [st.area_id]);
+      return `${so.kind === "hold_point" ? "Hold point released" : "Witness point accepted"}: ${st.code} ${st.title}.${after?.stage !== before?.stage ? ` Work moves on to ${after?.stage.replace(/_/g, " ")}.` : ""}`;
+    }
+    // Rejected by the client: the step fails and an NCR is raised for RGS to act on.
+    await db.query("update itp_steps set status = 'failed', result_note = coalesce(result_note, '') || $2 where id = $1", [so.entity_id, ` Client rejected: ${comment ?? ""}`]);
+    const ref = (await one<{ ref: string }>(db, `select 'NCR-' || to_char(now(),'YY') || '-' || lpad((coalesce(max(substring(ref from '\\d+$')::int), 0) + 1)::text, 3, '0') ref from findings where org_id = $1 and ref like 'NCR-%'`, [st.org_id]))!.ref;
+    await db.query(`insert into findings (org_id, client_company_id, project_id, area_id, itp_step_id, ref, kind, source, severity, title, description, raised_side, due_date)
+      values ($1,$2,$3,$4,$5,$6,'ncr','itp','high',$7,$8,'client', current_date + 3)`, [st.org_id, st.client_company_id, st.project_id, st.area_id, so.entity_id, ref, `${st.code}: ${st.title} rejected at client witness`, comment]);
+    return `Rejected. ${ref} raised for RGS to correct.`;
+  }
   if (so.kind === "completion" && so.project_id && status === "approved") {
     await db.query("update projects set status = 'completed' where id = $1", [so.project_id]);
-    return "Completion certified: the defects liability period starts today.";
+    await activateWarranties(db, so.project_id);
+    return "Completion certified: the defects liability period starts today and the warranties are active.";
   }
   return "";
 }

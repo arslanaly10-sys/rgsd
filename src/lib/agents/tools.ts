@@ -7,6 +7,7 @@ import { estimateRequest } from "@/lib/workflows/estimate";
 import { executeDispatchPlan, planDispatch, reconcile } from "@/lib/fleet";
 import { draftInvoices, issueInvoice } from "@/lib/billing";
 import { awaitingMe, listProjects, listSignoffs, raiseInstruction } from "@/lib/projects";
+import { handoverReadiness, hseKpis, listDocuments, listFindings, raiseFinding } from "@/lib/quality";
 import { activeRates, price, SCAFFOLD_TYPES, Scope, takeoff } from "@/lib/estimating";
 import { expiries, onHireBySite, opsKpis, scaffolds, siteSummaries, stockByYard } from "@/lib/queries";
 
@@ -430,7 +431,75 @@ const raise_instruction = def({
   },
 });
 
-export const TOOLS = { project_status, my_signoffs, raise_instruction, reconcile_materials, plan_dispatch, approve_dispatch_plan, draft_invoices, issue_invoice, estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
+const list_findings = def({
+  name: "list_findings",
+  description: "Open quality and safety findings (NCRs, client observations, HSE, punch list) with their corrective-action status. Optional project ref.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/).optional() }),
+  async run(ctx, i) {
+    const pid = i.project_ref ? (await listProjects(ctx.session)).find((p) => p.ref === i.project_ref)?.id : undefined;
+    if (i.project_ref && !pid) return { error: "not_found", brief_en: `I can't find ${i.project_ref} in your access.`, brief_ar: `لا أجد ${i.project_ref}.` };
+    const list = await listFindings(ctx.session, { projectId: pid, open: true });
+    if (!list.length) return { findings: [], brief_en: "No open findings.", brief_ar: "لا توجد ملاحظات مفتوحة." };
+    const en = list.slice(0, 10).map((f) => `• ${f.ref} ${f.project_ref ?? ""} [${f.kind}, ${f.severity}] ${f.title}: ${f.status.replace("_", " ")}${f.due_date ? `, due ${f.due_date}` : ""}`);
+    return { findings: list, brief_en: `${list.length} open finding(s):\n${en.join("\n")}`, brief_ar: `${list.length} ملاحظة مفتوحة:\n${en.join("\n")}` };
+  },
+});
+
+const raise_finding = def({
+  name: "raise_finding",
+  description: "Record a quality or safety observation on a project (clients: observation; RGS: NCR, HSE, punch or audit). RGS then plans a corrective action.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/), title: z.string().min(5).max(200), severity: z.enum(["low", "medium", "high", "critical"]).optional(), kind: z.enum(["ncr", "observation", "punch", "hse", "audit"]).optional() }),
+  async run(ctx, i) {
+    const p = (await listProjects(ctx.session)).find((x) => x.ref === i.project_ref);
+    if (!p) return { error: "not_found", brief_en: `I can't find ${i.project_ref} in your access.`, brief_ar: `لا أجد ${i.project_ref}.` };
+    const r = await raiseFinding(ctx.session, { projectId: p.id, kind: i.kind ?? (ctx.session.isStaff ? "ncr" : "observation"), severity: i.severity ?? "medium", title: i.title });
+    return { ref: r.ref, brief_en: `${r.ref} recorded on ${p.ref}: “${i.title}”. Corrective action due within ${r.due} day(s).`, brief_ar: `تم تسجيل ${r.ref} على ${p.ref}.` };
+  },
+});
+
+const hse_summary = def({
+  name: "hse_summary",
+  description: "Safety performance: man-hours, LTI, TRIR, LTIFR, near misses, toolbox talks, active permits and open HSE findings. Optional project ref.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/).optional() }),
+  async run(ctx, i) {
+    const pid = i.project_ref ? (await listProjects(ctx.session)).find((p) => p.ref === i.project_ref)?.id : undefined;
+    const k = await hseKpis(ctx.session, pid);
+    return { kpis: k,
+      brief_en: `HSE${i.project_ref ? ` for ${i.project_ref}` : ""}: ${Math.round(k.hours).toLocaleString("en")} man-hours (3 months), ${k.lti} LTI (LTIFR ${k.ltifr.toFixed(2)}, TRIR ${k.trir.toFixed(2)}), ${k.first_aid} first aid, ${k.near_miss} near miss(es), ${k.observations} observation(s). ${k.talks} toolbox talk(s) in 30 days with ${k.attendance} attendances; ${k.permits} active permit(s); ${k.open_hse} open HSE finding(s).`,
+      brief_ar: `السلامة: ${Math.round(k.hours)} ساعة عمل، ${k.lti} إصابة مضيعة للوقت، ${k.talks} اجتماع سلامة، ${k.open_hse} ملاحظة سلامة مفتوحة.` };
+  },
+});
+
+const document_status = def({
+  name: "document_status",
+  description: "Document control status: submittals under review (and overdue), latest review codes (A/B/C/D) and documents still needed for handover. Optional project ref.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/).optional() }),
+  async run(ctx, i) {
+    const pid = i.project_ref ? (await listProjects(ctx.session)).find((p) => p.ref === i.project_ref)?.id : undefined;
+    const docs = await listDocuments(ctx.session, { projectId: pid });
+    const review = docs.filter((d) => d.status === "under_review");
+    const needs = docs.filter((d) => ["revise_resubmit", "rejected"].includes(d.status));
+    const missing = docs.filter((d) => d.required_for_handover && !["approved", "approved_with_comments"].includes(d.status));
+    const line = (d: (typeof docs)[number]) => `• ${d.number} rev ${d.current_rev}: ${d.title}`;
+    return { review: review.length, resubmit: needs.length, handover_missing: missing.length,
+      brief_en: [`${review.length} under review${review.length ? `:\n${review.map(line).join("\n")}` : "."}`, needs.length ? `${needs.length} need revision (code C/D):\n${needs.map(line).join("\n")}` : "", missing.length ? `${missing.length} handover document(s) not yet approved.` : "All handover documents approved."].filter(Boolean).join("\n"),
+      brief_ar: `${review.length} قيد المراجعة، ${needs.length} تحتاج تعديل، ${missing.length} مستند تسليم غير معتمد.` };
+  },
+});
+
+const handover_status = def({
+  name: "handover_status",
+  description: "Handover readiness for a project: areas complete, ITP steps passed, open findings and punch list, handover documents approved, warranties.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/) }),
+  async run(ctx, i) {
+    const p = (await listProjects(ctx.session)).find((x) => x.ref === i.project_ref);
+    if (!p) return { error: "not_found", brief_en: `I can't find ${i.project_ref} in your access.`, brief_ar: `لا أجد ${i.project_ref}.` };
+    const h = await handoverReadiness(ctx.session, p.id);
+    return { ...h, brief_en: `${p.ref} handover readiness ${h.score}%${h.ready ? " (ready)" : ""}:\n${h.checks.map((c) => `${c.ok ? "✓" : "○"} ${c.en}`).join("\n")}`, brief_ar: `جاهزية التسليم ${h.score}%:\n${h.checks.map((c) => `${c.ok ? "✓" : "○"} ${c.ar}`).join("\n")}` };
+  },
+});
+
+export const TOOLS = { list_findings, raise_finding, hse_summary, document_status, handover_status, project_status, my_signoffs, raise_instruction, reconcile_materials, plan_dispatch, approve_dispatch_plan, draft_invoices, issue_invoice, estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
 export type ToolName = keyof typeof TOOLS;
 
 export function toolSpecs(names: readonly ToolName[]) {

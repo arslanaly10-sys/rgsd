@@ -65,7 +65,17 @@
     "instructions": "التعليمات والتغييرات",
     "signoffs": "توقيعات العملاء",
     "mySignoffs": "توقيعاتي",
-    "notifications": "الإشعارات"
+    "notifications": "الإشعارات",
+    "handover": "التسليم",
+    "itp": "الفحوصات والاختبارات",
+    "scaffoldTags": "بطاقات السقالات",
+    "findings": "الملاحظات",
+    "corrective": "الإجراءات التصحيحية",
+    "checklists": "قوالب الفحص",
+    "hse": "السلامة والصحة والبيئة",
+    "documentControl": "ضبط المستندات",
+    "evidence": "الصور والأدلة",
+    "docreview": "مراجعة المستندات"
   },
   "kpi": {
     "activeSites": "المواقع النشطة",
