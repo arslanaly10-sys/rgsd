@@ -35,6 +35,7 @@ export default async function RequestDetail({ params, searchParams }: { params: 
       <PageHeader title={`${r.ref} · ${r.title}`} sub={`${L(r, "client", l)}${r.site_code ? ` · ${r.site_code} ${L(r, "site_name", l)}` : ""}`}
         actions={<><Pill tone={statusTone(r.status)}>{t(`status.${r.status}`)}</Pill><Pill tone={statusTone(r.priority)}>{t(`status.${r.priority}`)}</Pill></>} />
       <Flash msg={msg} />
+      <Link href={`/ops/journeys?chain=request:${id}`} className="mb-3 inline-block text-sm font-semibold text-brand" data-journey-link>✦ {l === "ar" ? "رحلة هذا الطلب بين الوكلاء" : "See this request's journey between agents"} →</Link>
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="grid content-start gap-4">
           <Card title="Request">

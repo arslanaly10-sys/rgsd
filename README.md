@@ -82,3 +82,15 @@ npm run evals         # agent evals
 ```
 
 `.github/workflows/ci.yml` runs typecheck, selftest, migrations + seed on Postgres 16 with pgvector, build, all e2e suites and the evals on every push and pull request.
+
+## People, hierarchy and personal agents
+
+Every person has a **position** (their job) on top of their permission role, a reporting line, and one **personal agent** named for them (for example "Rania's Tender agent", "Abeer's Claim-check agent").
+
+- **RGS:** General Manager, Operations Manager, Project Manager, Senior Estimator, Business Development, Commercial/QS, Billing, QA/QC Manager, Scaffold Inspector, HSE & Training, HR & Saudization, Procurement & Stores, Yard & Logistics, Site Supervisor, Foreman, Document Controller, IT admin.
+- **Four client stories, each fully staffed** (PM, consultant/inspection, HSE, procurement, executive viewer): Aramco offshore, Sadara turnaround, Al Bargash developer, Qiddiya giga-project; plus Jeddah, Makkah and Rabigh projects.
+- **My agent** (`/ops/agent`, `/client/agent`): morning briefing, drafts that need your OK (approve or dismiss), what it did for you, who it chased, standing jobs you can switch off, your authority and reporting line, your team's agents. Autonomy is "routine" (reads, reminders, chasing and reversible drafts happen on their own) or "drafts only"; anything sent to a client or involving money always comes to a person.
+- **Approval limits by position (SAMPLE):** quotes PM ≤ SAR 100k, ops manager ≤ 500k, GM above; credit notes finance ≤ 25k, QS ≤ 100k, GM above. An approver above their limit is refused and told who approves.
+- **Request journeys** (`/ops/journeys`, `/client/journeys`): each request's handoffs between people and agents, from the client's message to the GM's approval and acceptance.
+- **Foreman voice report** (`/field/report`): in-browser dictation in English, Arabic, Urdu, Hindi, Malayalam, Tagalog and Bengali, turned into a progress entry.
+- **AI mode**: admins switch between mock (repeatable, free) and live Claude in Stage 1 review; agents run daily from the workflow cron, or on demand.

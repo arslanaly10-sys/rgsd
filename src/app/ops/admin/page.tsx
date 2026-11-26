@@ -8,5 +8,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
   const s = await requireSession("staff");
   if (s.role !== "admin") redirect("/ops");
   const sp = await searchParams;
-  return <HubPage s={s} />;
+  return <HubPage s={s} msg={sp.msg} />;
 }

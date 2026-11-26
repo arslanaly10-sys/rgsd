@@ -126,7 +126,13 @@ const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); 
   const comp = faris.locator('section', { hasText: 'PRJ-26-001' }).filter({ hasText: /Completion|الإنجاز/ }).filter({ has: faris.locator('input[name=signature]') }).first();
   await comp.locator('input[name=signature]').fill('Faris Al-Ghamdi');
   await act(faris, comp.locator('button[value=approved]'));
-  check(/warranties are active/.test(await flash(faris)), 'client signs completion → warranties active');
+  // Completion needs the client PM and the client's HSE manager.
+  const dana = await login('Dana Khalil');
+  await dana.goto(B + '/client/signoffs');
+  const comp2 = dana.locator('section', { hasText: 'PRJ-26-001' }).filter({ hasText: /Completion|الإنجاز/ }).filter({ has: dana.locator('input[name=signature]') }).first();
+  await comp2.locator('input[name=signature]').fill('Dana Khalil');
+  await act(dana, comp2.locator('button[value=approved]'));
+  check(/warranties are active/.test(await flash(dana)), 'client PM and HSE sign completion → warranties active');
   await faris.goto(B + '/client/handover');
   const cert = await faris.locator('a[href^="/warranty/"]').first().getAttribute('href');
   check(!!cert, 'warranty certificate link appears');

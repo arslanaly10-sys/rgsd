@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { one, withSystem } from "./db";
 import { isStaffRole, type Role } from "./roles";
+import { defaultPosition } from "./positions";
 
 const COOKIE = "rgs_session";
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-only-insecure-secret");
@@ -22,6 +23,7 @@ export type Session = {
   email: string;
   locale: "en" | "ar";
   mfaEnabled: boolean;
+  position: string;
 };
 
 const PENDING = "rgs_mfa_pending";
@@ -87,7 +89,7 @@ export async function getSessionById(id: string, withState = false): Promise<(Se
     one<{
       id: string; org_id: string; role: Role; client_company_id: string | null; full_name: string; full_name_ar: string | null;
       title: string | null; email: string; locale: "en" | "ar"; company_name: string | null; company_name_ar: string | null;
-      status: string; session_version: number; mfa_enabled: boolean;
+      status: string; session_version: number; mfa_enabled: boolean; position: string | null;
     }>(db, `select p.*, c.name as company_name, c.name_ar as company_name_ar
             from profiles p left join client_companies c on c.id = p.client_company_id where p.id = $1`, [id]),
   );
@@ -95,7 +97,7 @@ export async function getSessionById(id: string, withState = false): Promise<(Se
   return {
     id: p.id, orgId: p.org_id, role: p.role, isStaff: isStaffRole(p.role), clientCompanyId: p.client_company_id,
     companyName: p.company_name, companyNameAr: p.company_name_ar, fullName: p.full_name, fullNameAr: p.full_name_ar,
-    title: p.title, email: p.email, locale: p.locale, mfaEnabled: p.mfa_enabled,
+    title: p.title, email: p.email, locale: p.locale, mfaEnabled: p.mfa_enabled, position: p.position ?? defaultPosition(p.role),
     ...(withState ? { status: p.status, sessionVersion: p.session_version } : {}),
   };
 }

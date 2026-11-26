@@ -7,6 +7,10 @@ import type { ContentBlock, Message, ToolResultBlock, ToolUseBlock } from "@/lib
 import { AGENTS, ROUTER_PROMPT, systemPrompt, type AgentName } from "./agents";
 import { allowedTools, invokeTool } from "./policy";
 import { toolSpecs } from "./tools";
+import { POSITION } from "@/lib/positions";
+
+// Each position's home specialist: general questions go to the agent that fits the person's job.
+const HOME: Record<string, AgentName> = { general_manager: "briefing", ops_manager: "briefing", project_manager: "briefing", estimator: "estimator", sales_bd: "estimator", commercial_qs: "finance", finance: "finance", qaqc_manager: "inspector", inspector: "inspector", hse_training: "workforce", hr_saudization: "workforce", procurement: "fleet", yard_logistics: "fleet", site_supervisor: "briefing", foreman: "briefing", document_controller: "briefing", admin: "briefing" };
 
 export type TurnStep = { kind: "route" | "tool" | "llm"; name: string; tier?: number; status: "ok" | "approval" | "denied" | "error"; approvalId?: string };
 export type TurnResult = { runId: string; conversationId: string; agent: AgentName; agentLabel: string; reply: string; steps: TurnStep[]; mode: "mock" | "live"; error?: string };
@@ -57,8 +61,11 @@ export async function runTurn(session: Session, input: { text: string; conversat
   const steps: TurnStep[] = [];
   let idx = 0;
 
-  const agentName = await route(session, text);
+  let agentName = await route(session, text);
+  if (agentName === "briefing" && session.isStaff && HOME[session.position]) agentName = HOME[session.position];
   const agent = AGENTS[agentName];
+  const personal = await withSystem((db) => one<{ name: string }>(db, "select name from personal_agents where profile_id = $1", [session.id]));
+  const pos = POSITION[session.position];
   const run = await withSystem((db) =>
     one<{ id: string }>(db,
       `insert into agent_runs (org_id, user_id, client_company_id, agent, channel, conversation_id, input, mode, prompt_version)
@@ -77,7 +84,7 @@ export async function runTurn(session: Session, input: { text: string; conversat
     const toolNames = await allowedTools(session, agent.tools);
     const tools = toolSpecs(toolNames);
     const system = systemPrompt(agent, {
-      locale: input.locale, userName: session.fullName, roleLabel: ROLE_LABELS[session.role] ?? session.role,
+      locale: input.locale, userName: session.fullName, roleLabel: pos ? `${pos.en}${personal ? `; you are ${personal.name}, their personal agent: ${pos.mission}` : ""}` : ROLE_LABELS[session.role] ?? session.role,
       company: session.companyName, today: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }), memories: await memories(session), page: input.page,
     });
     const messages: Message[] = [...(await history(session, conversationId)), { role: "user", content: text }];
@@ -115,12 +122,12 @@ export async function runTurn(session: Session, input: { text: string; conversat
       db.query(`update agent_runs set status=$2, output=$3, model=$4, tokens_in=$5, tokens_out=$6, cost_usd=$7, latency_ms=$8, completed_at=now() where id=$1`,
         [runId, waiting ? "waiting_approval" : "completed", JSON.stringify({ reply, summary, steps }), model, tokensIn, tokensOut, estimateCost(model, tokensIn, tokensOut), Date.now() - started]),
     );
-    return { runId, conversationId, agent: agentName, agentLabel: agent.label[input.locale], reply, steps, mode };
+    return { runId, conversationId, agent: agentName, agentLabel: personal ? `${personal.name} · ${agent.label[input.locale]}` : agent.label[input.locale], reply, steps, mode };
   } catch (e) {
     console.error("[agent run]", e);
     const msg = (e as Error).message;
     await withSystem((db) => db.query("update agent_runs set status='failed', error=$2, latency_ms=$3, completed_at=now() where id=$1", [runId, msg.slice(0, 1000), Date.now() - started]));
     const reply = input.locale === "ar" ? "تعذر إكمال الطلب الآن. تم تسجيل الخطأ للفريق." : "I couldn't finish that right now. The error is logged for the team.";
-    return { runId, conversationId, agent: agentName, agentLabel: agent.label[input.locale], reply, steps, mode, error: "run_failed" };
+    return { runId, conversationId, agent: agentName, agentLabel: personal ? `${personal.name} · ${agent.label[input.locale]}` : agent.label[input.locale], reply, steps, mode, error: "run_failed" };
   }
 }

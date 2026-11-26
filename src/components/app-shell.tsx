@@ -18,6 +18,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
     area === "ops"
       ? [
           { label: n("workspace"), items: [
+            { href: "/ops/agent", label: n("myAgent"), icon: "spark", badge: badges.agent },
             { href: "/ops", label: n("overview"), icon: "home" },
             { href: "/ops/oversight", label: n("oversight"), icon: "spark" },
             { href: "/ops/projects", label: n("projects"), icon: "clipboard" },
@@ -34,6 +35,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
           { label: n("customer"), items: [
             { href: "/ops/requests", label: n("requests"), icon: "inbox", badge: badges.requests },
             { href: "/ops/triage", label: n("triage"), icon: "menu" },
+            { href: "/ops/journeys", label: n("journeys"), icon: "spark" },
             { href: "/ops/instructions", label: n("instructions"), icon: "doc" },
             { href: "/ops/signoffs", label: n("signoffs"), icon: "check" },
           ] },
@@ -69,6 +71,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
           { label: n("control"), items: [
             { href: "/ops/approvals", label: n("approvals"), icon: "check", badge: badges.approvals },
             { href: "/ops/agents", label: n("agents"), icon: "spark" },
+            ...(["admin", "ops_manager"].includes(session.role) ? [{ href: "/ops/agents/team", label: n("teamAgents"), icon: "people" } as NavItem] : []),
             { href: "/field", label: n("field"), icon: "phone" },
           ] },
           ...(session.role === "admin" ? [{ label: n("stage1"), items: [
@@ -85,6 +88,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
         ]
       : [
           { label: n("workspace"), items: [
+            { href: "/client/agent", label: n("myAgent"), icon: "spark", badge: badges.agent },
             { href: "/client", label: n("overview"), icon: "home" },
             { href: "/client/projects", label: n("projects"), icon: "clipboard" },
             { href: "/client/map", label: n("map"), icon: "pin" },
@@ -99,6 +103,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
           ] },
           { label: n("customer"), items: [
             { href: "/client/requests", label: n("requests"), icon: "inbox" },
+            { href: "/client/journeys", label: n("journeys"), icon: "spark" },
             { href: "/client/instructions", label: n("instructions"), icon: "doc" },
             { href: "/client/signoffs", label: n("mySignoffs"), icon: "check", badge: badges.signoffs },
           ] },

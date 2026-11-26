@@ -3,7 +3,26 @@ import Anthropic from "@anthropic-ai/sdk";
 import { mockProvider } from "./mock";
 import type { CompletionRequest, CompletionResponse, Provider } from "./types";
 
-export const aiMode = (): "mock" | "live" => (process.env.AI_MODE === "live" ? "live" : "mock");
+const hasKey = () => !!(process.env.ANTHROPIC_API_KEY || process.env.AI_GATEWAY_API_KEY);
+// Admin switch (org_settings.ai_mode): auto follows AI_MODE; mock forces the mock; live uses Claude when a key is set.
+const g = globalThis as unknown as { __rgsAiOverride?: { mode: "auto" | "mock" | "live"; at: number } };
+export const aiMode = (): "mock" | "live" => {
+  const o = g.__rgsAiOverride?.mode ?? "auto";
+  if (o === "mock") return "mock";
+  if (o === "live") return hasKey() ? "live" : "mock";
+  return process.env.AI_MODE === "live" ? "live" : "mock";
+};
+export const aiOverride = () => g.__rgsAiOverride?.mode ?? "auto";
+/** Refresh the admin switch from the database at most every 15 s. */
+export async function refreshAiMode() {
+  if (g.__rgsAiOverride && Date.now() - g.__rgsAiOverride.at < 15_000) return;
+  try {
+    const { withSystem, one } = await import("@/lib/db");
+    const r = await withSystem((db) => one<{ ai_mode: "auto" | "mock" | "live" }>(db, "select ai_mode from org_settings limit 1"));
+    g.__rgsAiOverride = { mode: r?.ai_mode ?? "auto", at: Date.now() };
+  } catch { g.__rgsAiOverride = { mode: "auto", at: Date.now() }; }
+}
+export const forceAiModeRefresh = () => { if (g.__rgsAiOverride) g.__rgsAiOverride.at = 0; };
 
 const modelId = (tier: "smart" | "fast") =>
   tier === "smart" ? process.env.AI_MODEL_SMART || "claude-opus-5-5" : process.env.AI_MODEL_FAST || "claude-haiku-5-5";

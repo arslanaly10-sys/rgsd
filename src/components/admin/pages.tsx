@@ -9,6 +9,8 @@ import { authMode, listPeople, mfaRequiredRoles } from "@/lib/identity";
 import { CLIENT_ROLES, STAFF_ROLES } from "@/lib/roles";
 import { inviteAction, resetMfaAction, revokeInviteAction, setStatusAction } from "@/app/auth-actions";
 import { dispatchNowAction } from "@/lib/actions/admin";
+import { setAiModeAction } from "@/lib/actions/agent";
+import { aiOverride, refreshAiMode } from "@/lib/ai/provider";
 import { SubmitButton } from "../submit-button";
 import { ButtonLink, Card, Confidence, DueLabel, Flash, Kpi, Mono, PageHeader, Pill, TagPill, Table, Td } from "../ui";
 
@@ -27,7 +29,8 @@ const SECTIONS: [string, string, string][] = [
   ["outbox", "Message outbox", "Every email / WhatsApp / SMS the platform sent or would send."],
 ];
 
-export async function HubPage({ s }: P) {
+export async function HubPage({ s, msg }: P) {
+  await refreshAiMode();
   const [counts] = await withSystem((db) => rows<{ tables: number; rls: number; policies: number; migrations: number }>(db,
     `select (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r')::int tables,
             (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity)::int rls,
@@ -36,6 +39,7 @@ export async function HubPage({ s }: P) {
   return (
     <>
       <PageHeader title="Stage 1 review" sub={`For RGS IT and admins. Signed in as ${s.fullName}. Everything here is read live from the running system.`} />
+      <Flash msg={msg} />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Tables" value={counts.tables} hint={`${counts.rls} with row-level security`} tone={counts.rls === counts.tables ? "default" : "red"} />
         <Kpi label="RLS policies" value={counts.policies} />
@@ -49,6 +53,13 @@ export async function HubPage({ s }: P) {
           </Link>
         ))}
       </div>
+      <Card title="AI mode" className="mt-4">
+        <form action={setAiModeAction} className="flex flex-wrap items-center gap-3 text-sm">
+          {(["auto", "mock", "live"] as const).map((m) => <label key={m} className="flex items-center gap-1.5"><input type="radio" name="mode" value={m} defaultChecked={aiOverride() === m} /> {m === "auto" ? "Follow AI_MODE" : m === "mock" ? "Mock (repeatable demo, no cost)" : "Live Claude"}</label>)}
+          <SubmitButton className="rounded-lg bg-ink px-3 py-1.5 text-sm font-semibold text-white" pending="…">Save</SubmitButton>
+          <span className="text-xs text-muted">Now running: <strong>{aiMode()}</strong>{!process.env.ANTHROPIC_API_KEY && !process.env.AI_GATEWAY_API_KEY ? " · no API key set" : ""}</span>
+        </form>
+      </Card>
       <Card title="Readiness for go-live" className="mt-4">
         <ul className="grid gap-1.5 text-sm">
           {[

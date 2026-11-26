@@ -95,7 +95,10 @@
     "people": "People & access",
     "outbox": "Message outbox",
     "security": "Security",
-    "map": "Projects map"
+    "map": "Projects map",
+    "myAgent": "My agent",
+    "teamAgents": "Everyone's agents",
+    "journeys": "Request journeys"
   },
   "kpi": {
     "activeSites": "Active sites",

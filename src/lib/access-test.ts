@@ -11,15 +11,15 @@ import { one, rows, withSystem, withUser } from "./db";
 export const PROBE_TABLES = [
   "projects", "project_areas", "project_photos", "signoffs", "variations", "instructions", "findings", "controlled_documents", "document_revisions", "warranties",
   "scaffolds", "inspections", "sites", "requests", "quotes", "invoices", "payment_claims", "payments", "credit_notes", "tickets", "ticket_messages",
-  "workers", "certifications", "rate_items", "agent_runs", "approval_requests", "notifications", "invites", "outbound_messages", "login_events", "auth_otps", "auth_factors",
+  "workers", "certifications", "rate_items", "agent_runs", "approval_requests", "notifications", "invites", "outbound_messages", "login_events", "auth_otps", "auth_factors", "personal_agents", "agent_inbox", "agent_jobs", "agent_handoffs", "approval_limits",
 ] as const;
 
 // Tables that hold RGS-internal data a client must never read at all.
-const STAFF_ONLY = new Set(["workers", "certifications", "rate_items", "agent_runs"]);
+const STAFF_ONLY = new Set(["workers", "certifications", "rate_items", "agent_runs", "approval_limits"]);
 // Tables nobody reads through the app's user role.
 const NOBODY = new Set(["auth_otps", "auth_factors"]);
 // Tables where each person only sees their own rows unless admin.
-const OWN_ONLY = new Set(["outbound_messages", "login_events"]);
+const OWN_ONLY = new Set(["outbound_messages", "login_events", "personal_agents", "agent_inbox", "agent_jobs"]);
 // Rows a client may see only in some states.
 const CLIENT_HIDDEN: Record<string, string> = {
   project_photos: "not visible_to_client", payment_claims: "status = 'draft'", credit_notes: "status <> 'issued'", ticket_messages: "internal",

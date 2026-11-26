@@ -10,6 +10,7 @@ import { seedQuality } from "./seed-quality";
 import { seedCommercial } from "./seed-commercial";
 import { seedWest } from "./seed-west";
 import { seedGallery } from "./seed-gallery";
+import { seedAgents } from "./seed-agents";
 
 loadEnv();
 
@@ -516,6 +517,8 @@ export async function seed(client: Client): Promise<Record<string, string>> {
   await seedCommercial({ db, insert, day, ts, int, org, people });
   // ── Visual project gallery (illustrations) and schematic site layouts ──
   await seedGallery({ db, insert, day, org, people });
+  // ── Hierarchy, four staffed client stories, approval limits, personal agents ──
+  await seedAgents({ db, insert, org });
 
   // Clear audit noise from seeding.
   await db.query("delete from audit_log");

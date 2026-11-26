@@ -24,6 +24,7 @@ export default async function Field() {
         <h1 className="mt-3 text-xl font-semibold">{t("field.title")}</h1>
         <p className="text-xs text-white/60">{t("field.sub")}</p>
         <Link href="/field/scan" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold"><Icon name="qr" /> {t("field.scan")}</Link>
+        <Link href="/field/report" className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-3 font-semibold">🎙 Voice report (Arabic, Urdu, Hindi, English…)</Link>
       </header>
       <div className="grid gap-5 p-4">
         {Object.entries(bySite).map(([code, items]) => (

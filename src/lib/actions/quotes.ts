@@ -5,6 +5,8 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { refuseViewer, requireSession } from "@/lib/auth";
 import { one, rows, withSystem, withUser } from "@/lib/db";
+import { quoteChain, recordHandoff, sarText } from "@/lib/agents/handoffs";
+import { POSITION } from "@/lib/positions";
 import { invokeTool } from "@/lib/agents/policy";
 import { estimateRequest } from "@/lib/workflows/estimate";
 import { ALLOWED_UPLOADS, MAX_UPLOAD_BYTES, putFile, sniffMime } from "@/lib/storage";
@@ -95,6 +97,12 @@ export async function submitQuote(formData: FormData) {
   if (!q) back(path, "err:Quote not found.");
   if (q!.status !== "draft") back(path, `err:This quote is already ${q!.status.replace(/_/g, " ")}.`);
   const r = await invokeTool({ session: s, runId: null, locale: s.locale }, "send_quote", { quote_ref: q!.ref });
+  const ch = await quoteChain(quoteId);
+  if (ch?.request_id && (r.kind === "approval" || r.kind === "result")) {
+    const ps = ((r.output.approver_positions as string[] | undefined) ?? []).filter((x) => POSITION[x]?.side === "rgs").map((x) => POSITION[x].en);
+    await recordHandoff({ orgId: s.orgId, clientCompanyId: ch.client_company_id, chain: `request:${ch.request_id}`, from: `${s.fullName} (${POSITION[s.position]?.en ?? "RGS"})`, to: r.kind === "approval" ? ps.join(" or ") || "Operations manager" : "Client",
+      action: r.kind === "approval" ? `Submitted ${ch.ref} (${sarText(ch.total)}) for approval; it is above the sender's authority` : `Sent ${ch.ref} to the client`, link: r.kind === "approval" ? "/ops/approvals" : `/client/quotes/${quoteId}`, status: "waiting" });
+  }
   if (r.kind === "approval") {
     await withSystem((db) => db.query("update quotes set status = 'pending_approval' where id = $1", [quoteId]), { actorId: s.id });
     revalidatePath(path);
@@ -125,6 +133,8 @@ export async function clientDecideQuote(formData: FormData) {
     await db.query("insert into notifications (org_id, role, kind, title, title_ar, link) select $1, unnest(array['estimator','ops_manager']), 'quote_decision', $2, $3, $4",
       [s.orgId, `${s.companyName}: ${q!.ref} ${decision}`, `${s.companyNameAr ?? s.companyName}: ${q!.ref} ${decision === "accepted" ? "مقبول" : "مرفوض"}`, `/ops/quotes/${quoteId}`]);
   }, { actorId: s.id });
+  if (q!.request_id) await recordHandoff({ orgId: s.orgId, clientCompanyId: s.clientCompanyId, chain: `request:${q!.request_id}`, from: `${s.fullName} (${POSITION[s.position]?.en ?? "Client"})`, to: decision === "accepted" ? "RGS Project agent and People agent" : "RGS Pipeline agent",
+    action: decision === "accepted" ? `Accepted ${q!.ref}. RGS mobilises: crew competency check, dispatch plan, permits` : `Declined ${q!.ref}${note ? `: “${note}”` : ""}`, link: `/ops/quotes/${quoteId}`, status: decision === "accepted" ? "approved" : "rejected" });
   revalidatePath(path);
   const ar = s.locale === "ar";
   back(path, decision === "accepted"
@@ -166,8 +176,15 @@ export async function createClientRequest(formData: FormData) {
   }
   await withSystem((db) => db.query("insert into notifications (org_id, role, kind, title, title_ar, link) values ($1,'estimator','new_request',$2,$3,$4)",
     [s.orgId, `New request ${ref} from ${s.companyName}`, `طلب جديد ${ref} من ${s.companyNameAr ?? s.companyName}`, `/ops/requests/${req!.id}`]));
+  await recordHandoff({ orgId: s.orgId, clientCompanyId: s.clientCompanyId, chain: `request:${req!.id}`, from: `${s.fullName} (${POSITION[s.position]?.en ?? "Client"})`, to: "RGS Tender agent", action: `Raised ${ref}: ${title}`, link: `/ops/requests/${req!.id}` });
   // Agentic follow-through: the Estimator drafts a quote for RGS in the background (drafts stay invisible to clients).
-  after(() => estimateRequest(s.orgId, req!.id, s.id).catch((e) => console.error("[auto-estimate]", e)));
+  after(async () => {
+    try {
+      await estimateRequest(s.orgId, req!.id, s.id);
+      const dq = await withSystem((db) => one<{ id: string; ref: string; total: string }>(db, "select id, ref, total from quotes where request_id = $1 order by created_at desc limit 1", [req!.id]));
+      if (dq) await recordHandoff({ orgId: s.orgId, clientCompanyId: s.clientCompanyId, chain: `request:${req!.id}`, from: "RGS Tender agent", to: "RGS Estimator", action: `Took off quantities and priced draft ${dq.ref} at ${sarText(dq.total)}; waiting for the estimator to review and send`, link: `/ops/quotes/${dq.id}`, status: "waiting" });
+    } catch (e) { console.error("[auto-estimate]", e); }
+  });
   revalidatePath(path);
   back(path, s.locale === "ar" ? `ok:تم تسجيل الطلب ${ref}. سيؤكد فريق RGS عرض السعر وستجده هنا.` : `ok:Request ${ref} logged. RGS will confirm a quote; you'll see it here.`);
 }
