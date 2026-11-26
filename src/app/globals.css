@@ -32,3 +32,12 @@ html[dir="rtl"] h1, html[dir="rtl"] h2, html[dir="rtl"] h3 { font-family: "IBM P
 .eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
 html[dir="rtl"] .eyebrow { letter-spacing: 0; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Motion: only where it explains a change (open from the trigger, focus). Values from the vendored motion skill. */
+details[data-project-switcher] > div { transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 160ms cubic-bezier(0.23, 1, 0.32, 1); transform-origin: top right; }
+@starting-style { details[data-project-switcher][open] > div { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+[role="status"] { animation: flash-in 220ms cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes flash-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}

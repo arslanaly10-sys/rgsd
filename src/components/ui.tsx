@@ -13,9 +13,9 @@ export function PageHeader({ title, sub, actions }: { title: string; sub?: strin
   );
 }
 
-export function Card({ title, action, children, className = "" }: { title?: string; action?: ReactNode; children: ReactNode; className?: string }) {
+export function Card({ title, action, children, className = "", id }: { title?: string; action?: ReactNode; children: ReactNode; className?: string; id?: string }) {
   return (
-    <section className={`min-w-0 rounded-xl border border-line bg-panel ${className}`}>
+    <section id={id} className={`min-w-0 scroll-mt-20 rounded-xl border border-line bg-panel ${className}`}>
       {title && (
         <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="text-sm font-semibold text-ink">{title}</h2>

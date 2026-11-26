@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/auth";
+import { refuseViewer, requireSession } from "@/lib/auth";
 import { QualityError, raiseFinding, recordItpStep, requestCompletion, reviewDocument, submitRevision, updateFinding, uploadEvidence } from "@/lib/quality";
 
 const back = (path: string, msg: string): never => redirect(`${path.split("?")[0]}?msg=${encodeURIComponent(msg)}`);
@@ -31,6 +31,7 @@ export async function recordItpAction(fd: FormData) {
 
 export async function raiseFindingAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const path = from(fd, s.isStaff ? "/ops/findings" : "/client/findings");
   const title = String(fd.get("title") ?? "").trim();
   if (title.length < 5) back(path, s.locale === "ar" ? "err:اكتب وصفاً واضحاً للملاحظة." : "err:Describe the finding in a few words.");
@@ -42,6 +43,7 @@ export async function raiseFindingAction(fd: FormData) {
 
 export async function findingStepAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const path = from(fd, s.isStaff ? "/ops/corrective" : "/client/corrective");
   const step = String(fd.get("step")) as "plan" | "verify" | "close" | "reopen";
   await run(path, () => updateFinding(s, String(fd.get("id")), step, {
@@ -52,6 +54,7 @@ export async function findingStepAction(fd: FormData) {
 
 export async function reviewDocumentAction(fd: FormData) {
   const s = await requireSession("client");
+  await refuseViewer(s);
   const path = from(fd, "/client/docreview");
   const code = String(fd.get("code")) as "A" | "B" | "C" | "D";
   if (!["A", "B", "C", "D"].includes(code)) back(path, "err:Pick a review code.");

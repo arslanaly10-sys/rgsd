@@ -17,6 +17,7 @@ export async function seedProjects(x: Ctx) {
     insert("profiles", { org_id: org, full_name, full_name_ar, email, role, title, client_company_id: company, locale });
   const pp = {
     pmcBargash: await P("Omar Saeed", "عمر سعيد", "consultant.bargash@demo.rgs", "client_consultant", "Resident Engineer, Gulf Project Consultants (Sample)", cc.bargash),
+    viewBargash: await P("Reem Al-Saleh", "ريم الصالح", "viewer.bargash@demo.rgs", "client_viewer", "Asset Manager (view only)", cc.bargash),
     finBargash: await P("Layla Hamdan", "ليلى حمدان", "procurement.bargash@demo.rgs", "client_finance", "Procurement Manager", cc.bargash, "ar"),
     qPm: await P("Saad Al-Otaibi", "سعد العتيبي", "client.qiddiya@demo.rgs", "client_admin", "Package Manager", cc.qiddiya, "ar"),
     qPmc: await P("Peter Walsh", "بيتر والش", "consultant.qiddiya@demo.rgs", "client_consultant", "QA/QC Lead, Arena PMC (Sample)", cc.qiddiya),

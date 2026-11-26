@@ -30,7 +30,8 @@
     "client_user": "Client user",
     "client_consultant": "Consultant / PMC",
     "client_hse": "Client HSE & QA/QC",
-    "client_finance": "Client finance & procurement"
+    "client_finance": "Client finance & procurement",
+    "client_viewer": "Customer viewer"
   },
   "nav": {
     "overview": "Overview",

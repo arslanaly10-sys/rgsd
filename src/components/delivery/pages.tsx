@@ -14,6 +14,7 @@ import { BeforeAfter, KsaMap, PackageRows, PhotoCard, ProjectGrid, ProjectImage,
 import { covers, listPhotos, projectExtras } from "@/lib/gallery";
 import { listContacts } from "@/lib/support";
 import { photoAction, uploadPhotoAction } from "@/lib/actions/gallery";
+import { clientCaps } from "@/lib/roles";
 
 type P = { s: Session; base: "/ops" | "/client"; msg?: string };
 const loc = async () => (await getLocale()) as Loc;
@@ -162,8 +163,8 @@ export async function ProjectDetailPage({ s, base, msg, id, tab = "overview", li
               </PhotoCard>
             ))}
           </div>
-          {staff && (
-            <Card title={tx(l, "Add site photos", "إضافة صور من الموقع")}>
+          {(staff || clientCaps(s.role).request) && (
+            <Card id="upload" title={staff ? tx(l, "Add site photos", "إضافة صور من الموقع") : tx(l, "Upload evidence", "رفع دليل")}>
               <form action={uploadPhotoAction} className="grid gap-2 md:grid-cols-6">
                 <input type="hidden" name="projectId" value={id} />
                 <input type="file" name="file" required accept="image/jpeg,image/png,image/webp" aria-label="Photo" className="text-sm md:col-span-2" />
@@ -172,11 +173,11 @@ export async function ProjectDetailPage({ s, base, msg, id, tab = "overview", li
                 <select name="line" aria-label="Service" className={field}><option value="">Service…</option>{p.service_lines.map((x) => <option key={x} value={x}>{SERVICE_META[x].en}</option>)}</select>
                 <select name="stage" aria-label="Stage" className={field}><option value="">Stage…</option><option value="before">Before</option><option value="during">During</option><option value="after">After</option></select>
                 <input type="date" name="takenOn" aria-label="Taken on" className={field} />
-                <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="visible" value="1" defaultChecked /> Share with client</label>
-                <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="cover" value="1" /> Use as cover</label>
+                {staff && <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="visible" value="1" defaultChecked /> Share with client</label>}
+                {staff && <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="cover" value="1" /> Use as cover</label>}
                 <SubmitButton className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white md:col-span-6 md:justify-self-start" pending="Uploading…">Upload photo</SubmitButton>
               </form>
-              <p className="mt-2 text-xs text-muted">Real site photos are shown before illustrations and become the project cover automatically.</p>
+              <p className="mt-2 text-xs text-muted">{staff ? "Real site photos are shown before illustrations and become the project cover automatically." : tx(l, "Your photo is shared with RGS and your organisation, with your name and the date.", "تُشارك صورتك مع RGS ومؤسستك مع اسمك والتاريخ.")}</p>
             </Card>
           )}
         </div>

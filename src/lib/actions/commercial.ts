@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/auth";
+import { refuseViewer, requireSession } from "@/lib/auth";
 import { invokeTool } from "@/lib/agents/policy";
 import { withSystem } from "@/lib/db";
 import { CommercialError, createCreditNote, recordPayment, releaseRetention, submitClaim } from "@/lib/commercial";
@@ -70,6 +70,7 @@ export async function recordPaymentAction(fd: FormData) {
 // ───────── Support ─────────
 export async function createTicketAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const base = s.isStaff ? "/ops/support" : "/client/support";
   let t: Awaited<ReturnType<typeof createTicket>>;
   try {
@@ -87,12 +88,14 @@ export async function createTicketAction(fd: FormData) {
 
 export async function replyTicketAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const id = String(fd.get("id"));
   await run(`${s.isStaff ? "/ops" : "/client"}/support/${id}`, () => replyTicket(s, id, String(fd.get("body") ?? ""), { internal: fd.get("internal") === "1", status: String(fd.get("status") ?? "") || undefined }));
 }
 
 export async function closeTicketAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const id = String(fd.get("id"));
   await run(`${s.isStaff ? "/ops" : "/client"}/support/${id}`, () => closeTicket(s, id, Number(fd.get("satisfaction")) || null));
 }

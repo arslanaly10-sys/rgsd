@@ -13,7 +13,7 @@ export type TurnResult = { runId: string; conversationId: string; agent: AgentNa
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Administrator", ops_manager: "Operations Manager", estimator: "Estimator", site_supervisor: "Site Supervisor", inspector: "Scaffold Inspector",
-  yard_logistics: "Yard & Logistics", hse_training: "HSE & Training", finance: "Finance", client_admin: "Client admin", client_user: "Client user",
+  yard_logistics: "Yard & Logistics", hse_training: "HSE & Training", finance: "Finance", client_admin: "Client admin", client_user: "Client user", client_viewer: "Client viewer (read-only)",
 };
 const MAX_ITERATIONS = 6;
 

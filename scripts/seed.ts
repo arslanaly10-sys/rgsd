@@ -492,7 +492,9 @@ export async function seed(client: Client): Promise<Record<string, string>> {
     ["message_client", 3, staffAll, [], ["ops_manager", "estimator", "admin"], "Send WhatsApp or email to a client"],
   ];
   for (const [tool, tier, allowed_roles, auto_roles, approver_roles, description] of policies) {
-    await insert("agent_policies", { org_id: org, tool, tier, allowed_roles, auto_roles, approver_roles, description });
+    // Client viewers get the read-only (T0) tools only.
+    const roles = tier === 0 && allowed_roles.includes("client_admin") && tool !== "statement_summary" ? [...allowed_roles, "client_viewer"] : allowed_roles;
+    await insert("agent_policies", { org_id: org, tool, tier, allowed_roles: roles, auto_roles, approver_roles, description });
   }
 
   // ── Integrations status ──

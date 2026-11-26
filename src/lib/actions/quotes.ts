@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/auth";
+import { refuseViewer, requireSession } from "@/lib/auth";
 import { one, rows, withSystem, withUser } from "@/lib/db";
 import { invokeTool } from "@/lib/agents/policy";
 import { estimateRequest } from "@/lib/workflows/estimate";
@@ -13,6 +13,7 @@ const back = (path: string, msg: string): never => redirect(`${path}?msg=${encod
 
 export async function uploadRequestDocument(formData: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const requestId = String(formData.get("requestId"));
   const path = s.isStaff ? `/ops/requests/${requestId}` : `/client/requests`;
   const file = formData.get("file");
@@ -105,6 +106,7 @@ export async function submitQuote(formData: FormData) {
 
 export async function clientDecideQuote(formData: FormData) {
   const s = await requireSession("client");
+  await refuseViewer(s);
   const quoteId = String(formData.get("quoteId"));
   const decision = formData.get("decision") === "accepted" ? "accepted" : "rejected";
   const path = `/client/quotes/${quoteId}`;
@@ -132,6 +134,7 @@ export async function clientDecideQuote(formData: FormData) {
 
 export async function createClientRequest(formData: FormData) {
   const s = await requireSession("client");
+  await refuseViewer(s);
   const path = "/client/requests";
   const title = String(formData.get("title") ?? "").trim().slice(0, 200);
   const description = String(formData.get("description") ?? "").trim().slice(0, 4000);

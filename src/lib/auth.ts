@@ -1,5 +1,5 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { one, withSystem } from "./db";
@@ -108,4 +108,20 @@ export async function requireSession(area?: "staff" | "client", opts: { allowWit
   if (area === "staff" && !s.isStaff) redirect("/client");
   if (area === "client" && s.isStaff) redirect("/ops");
   return s;
+}
+
+export class ViewOnlyError extends Error {
+  constructor() { super("Your role is view-only. Ask a requester or approver in your organisation."); }
+}
+/** Server-side guard for any write a client can trigger: viewers are refused. */
+export function assertCanAct(s: Session) {
+  if (s.role === "client_viewer") throw new ViewOnlyError();
+}
+
+/** For server actions: send a viewer back to the page they came from with a clear message. */
+export async function refuseViewer(s: Session) {
+  if (s.role !== "client_viewer") return;
+  let back = "/client";
+  try { const r = new URL((await headers()).get("referer") ?? ""); if (r.pathname.startsWith("/client")) back = r.pathname + (r.searchParams.get("tab") ? `?tab=${r.searchParams.get("tab")}` : ""); } catch {}
+  redirect(`${back}${back.includes("?") ? "&" : "?"}msg=${encodeURIComponent("err:Your role is view-only. Ask a requester or approver in your organisation.")}`);
 }

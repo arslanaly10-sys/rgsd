@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/auth";
+import { refuseViewer, requireSession } from "@/lib/auth";
 import { rows, withSystem, withUser } from "@/lib/db";
 import { decideSignoff, logProgress, raiseInstruction, respondInstruction, SignoffError, submitMeasurement, submitVariation } from "@/lib/projects";
 
@@ -43,6 +43,7 @@ export async function submitMeasurementAction(fd: FormData) {
 
 export async function raiseInstructionAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const path = from(fd, s.isStaff ? "/ops/instructions" : "/client/instructions");
   const title = String(fd.get("title") ?? "").trim();
   if (title.length < 5) back(path, s.locale === "ar" ? "err:اكتب عنواناً واضحاً للتعليمات." : "err:Give the instruction a clear title (at least 5 characters).");
@@ -84,6 +85,7 @@ export async function submitVariationAction(fd: FormData) {
 
 export async function decideSignoffAction(fd: FormData) {
   const s = await requireSession("client");
+  await refuseViewer(s);
   const path = from(fd, "/client/signoffs");
   const decision = fd.get("decision") === "approved" ? "approved" : "rejected";
   let msg: string;
@@ -104,6 +106,7 @@ export async function decideSignoffAction(fd: FormData) {
 /** Mark a dependency met: RGS for its own items, the client for client-side prerequisites. */
 export async function markDependencyAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   const path = from(fd, s.isStaff ? "/ops/dependencies" : "/client/dependencies");
   const id = String(fd.get("id"));
   const status = String(fd.get("status")) === "met" ? "met" : String(fd.get("status")) === "blocked" ? "blocked" : "open";
@@ -141,6 +144,7 @@ export async function triageAction(fd: FormData) {
 
 export async function markAllReadAction(fd: FormData) {
   const s = await requireSession();
+  await refuseViewer(s);
   await withUser(s, async (db) => {
     const ids = await rows<{ id: string }>(db, "select id from notifications order by created_at desc limit 300");
     for (const n of ids) await db.query("insert into notification_reads (notification_id, user_id) values ($1,$2) on conflict do nothing", [n.id, s.id]);

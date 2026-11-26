@@ -21,7 +21,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
     <>
       <PageHeader title={t("nav.requests")} sub={t("pages.requestsSub")} />
       <Flash msg={msg} />
-      <Card title={t("client.newRequest")} className="mb-4">
+      {s.role === "client_viewer" ? <Card id="new" className="mb-4"><p className="text-sm text-muted">Your role is view-only. Ask a requester or approver in your organisation to raise requests.</p></Card> : <Card id="new" title={t("client.newRequest")} className="mb-4">
         <form action={createClientRequest} className="grid gap-3 md:grid-cols-2">
           <div className="grid gap-1"><label htmlFor="title" className="text-xs font-medium text-muted">{ar ? "ما المطلوب؟" : "What do you need?"}</label><input id="title" name="title" required minLength={5} className={field} placeholder={ar ? "مثال: سقالة لاستبدال صمام" : "e.g. Access for valve replacement under cellar deck"} /></div>
           <div className="grid grid-cols-2 gap-3">
@@ -35,7 +35,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
             <SubmitButton className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white" pending={ar ? "جارٍ الإرسال…" : "Sending…"}>{ar ? "إرسال الطلب" : "Send request"}</SubmitButton>
           </div>
         </form>
-      </Card>
+      </Card>}
       <Card>
         <Table head={[t("cols.ref"), t("cols.title"), t("cols.source"), t("cols.requiredBy"), t("cols.status"), "Quote"]} empty={reqs.length ? undefined : t("app.none")}>
           {reqs.map((r) => (

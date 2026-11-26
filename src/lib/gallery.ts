@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { Session } from "./auth";
 import { one, rows, withSystem, withUser } from "./db";
+import { clientCaps } from "./roles";
 import { ALLOWED_UPLOADS, MAX_UPLOAD_BYTES, putFile, sniffMime } from "./storage";
 
 /* Project imagery: illustrations (badged) until RGS site photos are uploaded, then real photos lead. */
@@ -35,7 +36,8 @@ export async function photoCounts(s: Session) {
 }
 
 export async function uploadPhoto(s: Session, projectId: string, file: File, x: { areaId?: string | null; line?: string | null; stage?: string | null; caption: string; takenOn?: string | null; visible: boolean; cover: boolean }) {
-  if (!s.isStaff) throw new GalleryError("RGS uploads site photos.");
+  if (!s.isStaff && !clientCaps(s.role).request) throw new GalleryError("Your role is view-only. Ask a requester or approver in your organisation.");
+  if (!s.isStaff) { x.visible = true; x.cover = false; }
   if (!file.size || file.size > MAX_UPLOAD_BYTES) throw new GalleryError("Choose a photo up to 15 MB.");
   const p = await withUser(s, (db) => one<{ org_id: string; client_company_id: string; ref: string }>(db, "select org_id, client_company_id, ref from projects where id = $1", [projectId]));
   if (!p) throw new GalleryError("Project not found.");
@@ -51,7 +53,7 @@ export async function uploadPhoto(s: Session, projectId: string, file: File, x: 
     if (x.cover) await db.query("update project_photos set is_cover = false where project_id = $1", [projectId]);
     await db.query(`insert into project_photos (org_id, client_company_id, project_id, area_id, service_line, stage, kind, document_id, caption, taken_on, credit, is_cover, visible_to_client, uploaded_by)
       values ($1,$2,$3,$4,$5,$6,'photo',$7,$8,coalesce($9::date, current_date),$10,$11,$12,$13)`,
-      [p.org_id, p.client_company_id, projectId, x.areaId || null, x.line || null, x.stage || null, doc!.id, x.caption.slice(0, 200), x.takenOn || null, `RGS site photo · ${s.fullName}`, x.cover, x.visible, s.id]);
+      [p.org_id, p.client_company_id, projectId, x.areaId || null, x.line || null, x.stage || null, doc!.id, x.caption.slice(0, 200), x.takenOn || null, s.isStaff ? `RGS site photo · ${s.fullName}` : `Client photo · ${s.fullName}, ${s.companyName ?? ""}`, x.cover, x.visible, s.id]);
   }, { actorId: s.id });
   return `Photo added to ${p.ref}${x.visible ? " and shared with the client" : " (RGS only until you share it)"}.`;
 }

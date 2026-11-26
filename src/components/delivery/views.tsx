@@ -267,7 +267,7 @@ export function SignoffCard({ so, s, l, back, children }: { so: Signoff; s: Sess
   const mine = awaitingMe(s, so);
   const waiting = so.required_roles.filter((r) => !so.approvals.some((a) => a.role === r));
   return (
-    <Card className={mine ? "border-brand/60" : ""}>
+    <Card id={`so-${so.id}`} className={mine ? "border-brand/60" : ""}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

@@ -93,7 +93,7 @@ const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); 
   const logMsg = await flash(sup);
   check(/Logged on IN-K1. Installed now 350/.test(logMsg), `supervisor logs 50 lm on IN-K1 (${logMsg})`);
   await ops.goto(B + '/ops/projects');
-  await clickNav(ops, 'a:has-text("PRJ-26-003")');
+  await clickNav(ops, 'a[data-project="PRJ-26-003"]');
   await act(ops, 'button:has-text("Send measurement sheet")');
   check(/sent to the client for signature/.test(await flash(ops)), 'measurement sheet sent to Sadara');
   await ops.screenshot({ path: `${OUT}/project_detail.png`, fullPage: true });
@@ -130,7 +130,7 @@ const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); 
 
   // 12. Weekly report renders for the client
   await faris.goto(B + '/client/projects');
-  await clickNav(faris, 'a[href^="/client/projects/"]');
+  await clickNav(faris, 'a[data-project]');
   await clickNav(faris, 'a[href^="/reports/"]');
   check((await faris.locator('text=Weekly Progress Report').count()) === 1, 'client weekly report renders');
   await faris.screenshot({ path: `${OUT}/weekly_report.png`, fullPage: true });

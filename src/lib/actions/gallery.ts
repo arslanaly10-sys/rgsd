@@ -7,9 +7,9 @@ import { GalleryError, updatePhoto, uploadPhoto } from "@/lib/gallery";
 const back = (path: string, msg: string): never => redirect(`${path}${path.includes("?") ? "&" : "?"}msg=${encodeURIComponent(msg)}`);
 
 export async function uploadPhotoAction(fd: FormData) {
-  const s = await requireSession("staff");
+  const s = await requireSession();
   const projectId = String(fd.get("projectId"));
-  const path = `/ops/projects/${projectId}?tab=photos`;
+  const path = `${s.isStaff ? "/ops" : "/client"}/projects/${projectId}?tab=photos`;
   const file = fd.get("file");
   if (!(file instanceof File) || !file.size) back(path, "err:Choose a photo.");
   let m: string;

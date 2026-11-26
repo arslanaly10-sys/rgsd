@@ -5,7 +5,7 @@ set -u
 export OUT="${OUT:-test-results}"
 mkdir -p "$OUT/shots"
 fail=0
-for suite in smoke agents day3 day4 day5 phase-a phase-b phase-c phase-d phase-e; do
+for suite in smoke agents day3 day4 day5 phase-a phase-b phase-c phase-d phase-e phase-f links; do
   npm run -s db:reset >/dev/null 2>&1 || { echo "db reset failed"; exit 1; }
   log=$(node "tests/e2e/$suite.cjs" "$OUT" 2>&1)
   code=$?
