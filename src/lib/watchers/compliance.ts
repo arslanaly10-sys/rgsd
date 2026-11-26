@@ -1,5 +1,8 @@
 import "server-only";
-import { rows, withSystem } from "@/lib/db";
+import { getSessionById } from "@/lib/auth";
+import { draftInvoices } from "@/lib/billing";
+import { one, rows, withSystem } from "@/lib/db";
+import { reconcile } from "@/lib/fleet";
 
 /*
  * Tag compliance watcher (runs daily by cron, or on demand).
@@ -53,9 +56,44 @@ export async function runComplianceWatcher(orgId: string) {
   return result;
 }
 
+/** Billing watcher: draft invoices for sites with 28+ unbilled on-hire days (monthly cycle). */
+export async function runBillingWatcher(orgId: string) {
+  const created = await draftInvoices(orgId, { minDays: 28 });
+  const summary = created.length ? `${created.length} invoice draft(s): ${created.map((c) => `${c.ref} ${c.site}${c.missingPo ? " (no PO)" : ""}`).join(", ")}.` : "No sites due for billing.";
+  await withSystem((db) => db.query(`insert into agent_runs (org_id, agent, channel, status, input, output, mode, completed_at) values ($1,'finance','cron','completed',$2,$3,'mock',now())`,
+    [orgId, JSON.stringify({ text: "Billing watcher" }), JSON.stringify({ summary, reply: summary })]));
+  return { created: created.length, summary };
+}
+
+/** Materials watcher: delivered − returned vs on-hire per site and item; any gap becomes a task (yard for losses, finance for over-billing). */
+export async function runMaterialsWatcher(orgId: string) {
+  const staff = await withSystem((db) => one<{ id: string }>(db, "select id from profiles where org_id = $1 and role = 'ops_manager' limit 1", [orgId]));
+  if (!staff) return { gaps: 0, created: 0, summary: "No operations manager profile to run as." };
+  const s = await getSessionById(staff.id);
+  const gaps = await reconcile(s!);
+  let created = 0;
+  await withSystem(async (db) => {
+    const month = new Date().toISOString().slice(0, 7);
+    for (const g of gaps) {
+      const unbilled = g.kind === "unbilled_or_lost";
+      const r = await db.query(`insert into tasks (org_id, title, description, assignee_role, due_date, priority, source, watcher, dedupe_key)
+        values ($1,$2,$3,$4, current_date + 2, 'high', 'watcher', 'materials', $5) on conflict (org_id, dedupe_key) do nothing`,
+        [orgId,
+          unbilled ? `${g.site_code}: ${g.variance} × ${g.sku} on site but not on hire (≈ SAR ${Math.round(g.value).toLocaleString("en")} of stock)` : `${g.site_code}: rental charged on ${-g.variance} × ${g.sku} that already came back`,
+          unbilled ? `Delivered ${g.delivered}, returned ${g.returned}, on hire ${g.on_hire}. Either put the extra on hire (bill it) or find it: count on site.` : `Delivered ${g.delivered}, returned ${g.returned}, on hire ${g.on_hire}. Close the on-hire line from the return date and credit the client if already invoiced.`,
+          unbilled ? "yard_logistics" : "finance", `material:${g.site_code}:${g.sku}:${g.kind}:${month}`]);
+      created += r.rowCount ?? 0;
+    }
+    const summary = gaps.length ? `${gaps.length} material gap(s): ${gaps.map((g) => `${g.site_code} ${g.sku} ${g.variance > 0 ? "+" : ""}${g.variance}`).join(", ")}.` : "Delivered, returned and on-hire quantities all match.";
+    await db.query(`insert into agent_runs (org_id, agent, channel, status, input, output, mode, completed_at) values ($1,'fleet','cron','completed',$2,$3,'mock',now())`,
+      [orgId, JSON.stringify({ text: "Materials reconciliation watcher" }), JSON.stringify({ summary, reply: summary })]);
+  });
+  return { gaps: gaps.length, created };
+}
+
 export async function runAllWatchers() {
   const orgs = await withSystem((db) => rows<{ id: string }>(db, "select id from organizations"));
   const out = [];
-  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id) });
+  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id), billing: await runBillingWatcher(o.id), materials: await runMaterialsWatcher(o.id) });
   return out;
 }

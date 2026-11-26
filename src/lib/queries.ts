@@ -156,9 +156,9 @@ export async function onHireBySite(s: Session) {
 
 export async function movementsUpcoming(s: Session) {
   return withUser(s, (db) =>
-    rows<{ ref: string; kind: string; status: string; scheduled_for: string | null; site_code: string | null; plate: string | null; driver: string | null; dn: string | null; lines: number }>(
+    rows<{ id: string; ref: string; kind: string; status: string; scheduled_for: string | null; site_code: string | null; plate: string | null; driver: string | null; dn: string | null; lines: number }>(
       db,
-      `select m.ref, m.kind, m.status, m.scheduled_for, si.code site_code, v.plate, v.driver_name driver, m.delivery_note_no dn,
+      `select m.id, m.ref, m.kind, m.status, m.scheduled_for, si.code site_code, v.plate, v.driver_name driver, m.delivery_note_no dn,
               (select count(*) from movement_lines ml where ml.movement_id = m.id)::int lines
        from movements m left join sites si on si.id = m.site_id left join vehicles v on v.id = m.vehicle_id
        order by (m.status = 'planned') desc, m.scheduled_for desc nulls last limit 20`,

@@ -4,6 +4,8 @@ import type { Session } from "@/lib/auth";
 import { one, rows, withSystem, withUser } from "@/lib/db";
 import { daysUntil, fmtNum, fmtSAR } from "@/lib/format";
 import { estimateRequest } from "@/lib/workflows/estimate";
+import { executeDispatchPlan, planDispatch, reconcile } from "@/lib/fleet";
+import { draftInvoices, issueInvoice } from "@/lib/billing";
 import { activeRates, price, SCAFFOLD_TYPES, Scope, takeoff } from "@/lib/estimating";
 import { expiries, onHireBySite, opsKpis, scaffolds, siteSummaries, stockByYard } from "@/lib/queries";
 
@@ -325,7 +327,71 @@ const estimate_request = def({
   },
 });
 
-export const TOOLS = { estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
+const reconcile_materials = def({
+  name: "reconcile_materials",
+  description: "Compare delivered, returned and on-hire quantities per site and item. Finds material on site that isn't billed (or is lost) and rental charged on material that already came back.",
+  schema: z.object({ site_code: siteCode }),
+  async run(ctx, i) {
+    const gaps = await reconcile(ctx.session, i.site_code);
+    if (!gaps.length) return { gaps: [], brief_en: `Delivered, returned and on-hire quantities match${i.site_code ? ` at ${i.site_code}` : " at every site"}.`, brief_ar: "الكميات المسلّمة والمرتجعة والمؤجرة متطابقة." };
+    const en = gaps.slice(0, 10).map((g) => g.kind === "unbilled_or_lost"
+      ? `• ${g.site_code} ${g.sku}: ${g.variance} on site but not on hire (delivered ${g.delivered}, returned ${g.returned}, on hire ${g.on_hire}). ≈ ${fmtSAR(g.value, "en")} of stock unbilled or lost.`
+      : `• ${g.site_code} ${g.sku}: rental still charged on ${-g.variance} that came back (on hire ${g.on_hire}, should be ${g.expected_on_site}).`);
+    const ar = gaps.slice(0, 10).map((g) => g.kind === "unbilled_or_lost" ? `• ${g.site_code} ${g.sku}: ${g.variance} في الموقع غير مؤجرة` : `• ${g.site_code} ${g.sku}: إيجار يُحتسب على ${-g.variance} تمت إعادتها`);
+    return { gaps, brief_en: `${gaps.length} material gap(s):\n${en.join("\n")}`, brief_ar: `${gaps.length} فرق في المواد:\n${ar.join("\n")}` };
+  },
+});
+
+const plan_dispatch = def({
+  name: "plan_dispatch",
+  description: "Draft the delivery and collection plan for a date: assigns trucks by weight, orders stops by distance, respects night-only sites and offshore boat transfers. Saves a draft for approval.",
+  schema: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("YYYY-MM-DD, default tomorrow") }),
+  async run(ctx, i) {
+    const date = i.date ?? new Date(Date.now() + 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+    const { planId, plan } = await planDispatch(ctx.session, date);
+    if (!plan.trips.length && !plan.unassigned.length) return { plan_id: planId, plan, brief_en: `Nothing to dispatch on ${date}: no planned deliveries and every off-hire collection is already on its way.`, brief_ar: `لا يوجد ما يُوزّع يوم ${date}.` };
+    const trips = plan.trips.map((t, k) => `• Trip ${k + 1} ${t.vehicle.plate} (${t.vehicle.kind}, ${t.vehicle.driver ?? "driver tbc"}), ${t.window}: ${t.stops.map((x) => `${x.kind === "delivery" ? "deliver" : "collect"} ${x.site_code}`).join(" → ")} · ${(t.load_kg / 1000).toFixed(1)} t (${t.utilisation}%) · ~${t.est_km} km, ${t.est_hours} h`);
+    return {
+      plan_id: planId, plan, link: "/ops/fleet/dispatch",
+      brief_en: `Draft dispatch plan for ${date}: ${plan.trips.length} trip(s).\n${trips.join("\n")}${plan.warnings.length ? `\nNotes:\n${plan.warnings.map((w) => `• ${w}`).join("\n")}` : ""}\nApprove it on Fleet → Dispatch (plan ${planId.slice(0, 8)}).`,
+      brief_ar: `مسودة خطة التوزيع ليوم ${date}: ${plan.trips.length} رحلة. اعتمدها من صفحة التوزيع.`,
+    };
+  },
+});
+
+const approve_dispatch_plan = def({
+  name: "approve_dispatch_plan",
+  description: "Confirm a draft dispatch plan: trucks are assigned to deliveries and collection movements are created.",
+  schema: z.object({ plan_id: z.string().uuid() }),
+  async run(ctx, i) {
+    const r = await executeDispatchPlan(ctx.session, i.plan_id);
+    return { ...r, brief_en: `Dispatch plan confirmed: ${r.trips} trip(s), ${r.deliveries} delivery(ies) in transit, ${r.collections} collection(s) created.`, brief_ar: `تم اعتماد خطة التوزيع: ${r.trips} رحلة.` };
+  },
+});
+
+const draft_invoices = def({
+  name: "draft_invoices",
+  description: "Draft rental invoices for on-hire days not yet billed (one per site). Drafts only; Finance issues them after approval.",
+  schema: z.object({ site_code: siteCode }),
+  async run(ctx, i) {
+    const created = await draftInvoices(ctx.session.orgId, { siteCode: i.site_code, actorId: ctx.session.id });
+    if (!created.length) return { created: [], brief_en: "Nothing to draft: every site is billed up to yesterday or already has an unissued invoice.", brief_ar: "لا يوجد ما يُفوتر حالياً." };
+    return { created, brief_en: `${created.length} draft invoice(s):\n${created.map((c) => `• ${c.ref} ${c.site}: ${fmtSAR(c.total, "en", 2)}${c.missingPo ? " (no PO yet: Finance has a task)" : ""}`).join("\n")}\nReview them on Billing and submit for issue.`, brief_ar: `${created.length} مسودة فاتورة جاهزة للمراجعة.` };
+  },
+});
+
+const issue_invoice = def({
+  name: "issue_invoice",
+  description: "Issue an invoice to the client with the ZATCA QR code. Always needs Finance approval.",
+  schema: z.object({ invoice_ref: z.string().regex(/^INV-\d{2}-\d{4}$/) }),
+  async run(ctx, i) {
+    const r = await issueInvoice(ctx.session, i.invoice_ref);
+    if (!r.ok) return { error: "cannot_issue", brief_en: r.error, brief_ar: r.error };
+    return { ...r, brief_en: `${r.ref} issued (${fmtSAR(r.total, "en", 2)}) with ZATCA QR. It is in the client's portal. ZATCA clearance needs the live Fatoora integration.`, brief_ar: `تم إصدار ${r.ref} مع رمز زاتكا.` };
+  },
+});
+
+export const TOOLS = { reconcile_materials, plan_dispatch, approve_dispatch_plan, draft_invoices, issue_invoice, estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
 export type ToolName = keyof typeof TOOLS;
 
 export function toolSpecs(names: readonly ToolName[]) {

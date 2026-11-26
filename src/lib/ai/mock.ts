@@ -63,6 +63,11 @@ function plan(text: string, tools: Set<string>, agent: string): Plan {
 
   const reqRef = text.match(/\bRQ-\d{2}-\d{4}\b/i)?.[0]?.toUpperCase();
   if (reqRef && /estimate|quote|price|draft|take.?off|سعّر|سعر|عرض/i.test(text)) { add("estimate_request", { request_ref: reqRef }); if (p.length) return p; }
+  const invRef = text.match(/\bINV-\d{2}-\d{4}\b/i)?.[0]?.toUpperCase();
+  if (invRef && /issue|send|أصدر/i.test(text)) { add("issue_invoice", { invoice_ref: invRef }); if (p.length) return p; }
+  if (/reconcil|missing|loss|lost|shrink|variance|unbilled material|فرق|مفقود/i.test(text)) { add("reconcile_materials", { site_code: site }); if (p.length) return p; }
+  if (/dispatch|route|trucks?\b|tomorrow'?s? (deliver|plan)|plan (the )?deliver|توزيع|شاحنات/i.test(text)) { add("plan_dispatch", {}); if (p.length) return p; }
+  if (/(draft|run|prepare).{0,15}(invoice|billing)|bill(ing)? run|فوترة|فواتير/i.test(text)) { add("draft_invoices", { site_code: site }); if (p.length) return p; }
   if (/send\s+(the\s+)?quote|أرسل\s+العرض/i.test(text) && quoteRef) { add("send_quote", { quote_ref: quoteRef }); return p; }
   if (/(set|change|mark|clear|update|remove|lift).{0,20}tag|tag.{0,12}(to|as)\s+(green|yellow|red)|غي[ّ]?ر.{0,10}البطاقة|أزل.{0,10}البطاقة/i.test(text) && tag) {
     const target = (text.match(/\b(?:to|as)\s+(green|yellow|red)\b/i)?.[1]?.toLowerCase()) ?? (/clear|remove|lift|أزل|إزالة/i.test(text) ? "green" : status ?? "green");
@@ -140,10 +145,10 @@ export const mockProvider: Provider = {
 export function mockRoute(text: string, isStaff: boolean): string {
   if (!isStaff) return "concierge";
   if (/quote|price|cost|estimate|tender|rfq|boq|سعر|عرض|مناقصة/i.test(text)) return "estimator";
-  if (/tag|inspect|defect|red|yellow|overdue|scaffold|فحص|بطاقة|أحمر|عيوب/i.test(text)) return "inspector";
-  if (/stock|yard|hire|deliver|dispatch|truck|collect|low on|boards?\b|couplers?|مخزون|إيجار|توصيل|شاحن|ألواح/i.test(text)) return "fleet";
+  if (/tag|inspect|defect|\bred\b|\byellow\b|overdue|scaffold|فحص|بطاقة|أحمر|عيوب/i.test(text)) return "inspector";
+  if (/reconcil|missing|loss|shrink|variance|route|stock|yard|hire|deliver|dispatch|truck|collect|low on|boards?\b|couplers?|مخزون|إيجار|توصيل|شاحن|ألواح/i.test(text)) return "fleet";
   if (/cert|iqama|crew|worker|training|manpower|شهاد|إقام|عمال|تدريب/i.test(text)) return "workforce";
-  if (/invoice|billing|zatca|payment|فاتور|زاتكا/i.test(text)) return "finance";
+  if (/invoice|billing|zatca|payment|فاتور|زاتكا|فوترة/i.test(text)) return "finance";
   if (/procedure|how|rule|standard|إجراء|كيف/i.test(text)) return "inspector";
   return "briefing";
 }

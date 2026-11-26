@@ -11,7 +11,7 @@ export default async function Page() {
   return (
     <>
       <PageHeader title={t("nav.finance")} sub={t("pages.financeSub")} />
-      <Card><InvoiceTable list={list} showClient={false} /></Card>
+      <Card><InvoiceTable list={list} showClient={false} linkBase="/inv/" /></Card>
     </>
   );
 }

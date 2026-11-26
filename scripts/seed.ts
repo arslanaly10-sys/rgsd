@@ -22,7 +22,7 @@ const day = (offset: number) => {
 };
 const ts = (offset: number, hour = 9) => `${day(offset)}T${String(hour).padStart(2, "0")}:00:00Z`;
 
-const db = new Client({ connectionString: process.env.DATABASE_URL });
+let db: Client;
 
 async function insert<T extends Record<string, unknown>>(table: string, row: T): Promise<string> {
   const keys = Object.keys(row);
@@ -35,8 +35,10 @@ async function insert<T extends Record<string, unknown>>(table: string, row: T):
   return r.rows[0]?.id;
 }
 
-async function main() {
-  await db.connect();
+/** Load SAMPLE data. Wipes existing org data first: callers must only use it on an empty or disposable database. */
+export async function seed(client: Client): Promise<Record<string, string>> {
+  db = client;
+  s = 20261126;
   await db.query("begin");
   // Clear (child tables cascade from organizations)
   await db.query("delete from audit_log; delete from organizations;");
@@ -291,23 +293,34 @@ async function main() {
     }
   }
 
-  // ── Movements (deliveries / returns) ──
+  // ── Movements: one completed delivery per site matching what is on hire, plus upcoming work ──
   let mv = 1;
+  const mvRef = () => `MV-${String(mv++).padStart(5, "0")}`;
   for (const [key, set] of Object.entries(hireSets)) {
-    for (let k = 0; k < 2; k++) {
-      const completed = k === 0;
-      const m = await insert("movements", {
-        org_id: org, client_company_id: siteCc[key], site_id: sites[key], kind: completed ? "delivery" : pick(["delivery", "return"]), ref: `MV-${String(mv++).padStart(5, "0")}`,
-        from_location_id: key === "sadara" ? yardJubail : yardDammam, to_location_id: siteLoc[key], delivery_note_no: `DN-${int(30000, 39999)}`,
-        vehicle_id: pick(vehicleIds), status: completed ? "completed" : "planned", scheduled_for: completed ? day(-int(5, 40)) : day(int(1, 3)),
-        completed_at: completed ? ts(-int(5, 40)) : null, created_by: people.yard,
-      });
-      for (const [sku, qty] of set.slice(0, 3)) await insert("movement_lines", { org_id: org, movement_id: m, item_id: items[sku].id, qty: Math.round(qty * 0.2) });
+    const m = await insert("movements", {
+      org_id: org, client_company_id: siteCc[key], site_id: sites[key], kind: "delivery", ref: mvRef(),
+      from_location_id: key === "sadara" ? yardJubail : yardDammam, to_location_id: siteLoc[key], delivery_note_no: `DN-${int(30000, 39999)}`,
+      vehicle_id: pick(vehicleIds), status: "completed", scheduled_for: day(-60), completed_at: ts(-60), created_by: people.yard,
+    });
+    for (const [sku, qty] of set) {
+      // Planted anomaly 1 (Karan): 100 more 6.4 m tubes delivered than are on hire, so they are on site but unbilled.
+      const extra = key === "karan" && sku === "TB-640" ? 100 : 0;
+      await insert("movement_lines", { org_id: org, movement_id: m, item_id: items[sku].id, qty: qty + extra });
     }
   }
-  // A shrinkage pattern for the anomaly agent: delivered more than returned at Qiddiya.
-  const lossMv = await insert("movements", { org_id: org, client_company_id: cc.qiddiya, site_id: sites.qiddiya, kind: "return", ref: `MV-${String(mv++).padStart(5, "0")}`, from_location_id: siteLoc.qiddiya, to_location_id: yardDammam, delivery_note_no: "DN-38817", status: "completed", completed_at: ts(-3), scheduled_for: day(-3), created_by: people.yard });
-  await insert("movement_lines", { org_id: org, movement_id: lossMv, item_id: items["BD-390"].id, qty: 410 });
+  // Planted anomaly 2 (Qiddiya): 410 boards came back to the yard but the on-hire line was never reduced, so rental is still charged.
+  const qRet = await insert("movements", { org_id: org, client_company_id: cc.qiddiya, site_id: sites.qiddiya, kind: "return", ref: mvRef(), from_location_id: siteLoc.qiddiya, to_location_id: yardDammam, delivery_note_no: "DN-38817", status: "completed", completed_at: ts(-12), scheduled_for: day(-12), created_by: people.yard });
+  await insert("movement_lines", { org_id: org, movement_id: qRet, item_id: items["BD-390"].id, qty: 410 });
+  // Upcoming planned work for the dispatch planner.
+  const plannedDefs: [string, string, [string, number][], number][] = [
+    ["safaniyah", "delivery", [["TB-640", 200], ["CP-DBL", 1200], ["BD-390", 260]], 1],
+    ["qiddiya", "delivery", [["RL-STD3", 180], ["CL-LED25", 240], ["BD-390", 200]], 1],
+    ["bargash", "delivery", [["RL-STD3", 60], ["AC-LAD", 4]], 1],
+  ];
+  for (const [key, kind, lines, inDays] of plannedDefs) {
+    const m = await insert("movements", { org_id: org, client_company_id: siteCc[key], site_id: sites[key], kind, ref: mvRef(), from_location_id: yardDammam, to_location_id: siteLoc[key], status: "planned", scheduled_for: day(inDays), created_by: people.yard });
+    for (const [sku, qty] of lines) await insert("movement_lines", { org_id: org, movement_id: m, item_id: items[sku].id, qty });
+  }
 
   // ── Workers & certifications ──
   const first = ["Mohammed", "Ahmed", "Rajesh", "Suresh", "Imran", "Asif", "Jomon", "Ramesh", "Faisal", "Anil", "Bilal", "Tariq", "Sanjay", "Nadeem", "Ali", "Manoj", "Hassan", "Vinod", "Shafiq", "Deepak"];
@@ -444,6 +457,10 @@ async function main() {
     ["create_task", 1, staffAll, [], [], "Create a task or reminder"],
     ["remember", 1, staffAll, [], [], "Save client or site memory"],
     ["create_request", 1, everyone, [], [], "Log a client scaffold request"],
+    ["reconcile_materials", 0, staffAll, [], [], "Compare delivered, returned and on-hire quantities per site"],
+    ["plan_dispatch", 1, ["admin", "ops_manager", "yard_logistics"], [], [], "Draft tomorrow's delivery and collection plan"],
+    ["draft_invoices", 1, ["admin", "finance", "ops_manager"], [], [], "Draft rental invoices for unbilled on-hire days"],
+    ["extract_delivery_note", 1, ["admin", "ops_manager", "yard_logistics"], [], [], "Read a delivery note into a draft movement"],
     ["estimate_request", 1, ["admin", "ops_manager", "estimator"], [], [], "Run the Estimator workflow and save a draft quote"],
     ["indicative_quote", 1, everyone, [], [], "Instant indicative price for a request (not binding)"],
     ["request_off_hire", 2, everyone, ["ops_manager", "yard_logistics"], ["ops_manager", "yard_logistics"], "Request collection of material from a site"],
@@ -476,12 +493,15 @@ async function main() {
     (select count(*) from sites) sites, (select count(*) from scaffolds) scaffolds, (select count(*) from inspections) inspections,
     (select count(*) from workers) workers, (select count(*) from certifications) certs, (select count(*) from on_hire) on_hire,
     (select count(*) from invoices) invoices, (select count(*) from kb_chunks) kb_chunks`);
-  console.log("seeded", counts.rows[0]);
-  await db.end();
+  return counts.rows[0];
 }
 
-main().catch(async (e) => {
-  console.error(e);
-  try { await db.query("rollback"); } catch {}
-  process.exit(1);
-});
+// CLI: npm run db:seed
+if (process.argv[1]?.match(/seed\.ts$/)) {
+  const c = new Client({ connectionString: process.env.DATABASE_URL, ssl: process.env.DB_LOCAL === "1" ? false : { rejectUnauthorized: false } });
+  c.connect()
+    .then(() => seed(c))
+    .then((counts) => console.log("seeded", counts))
+    .catch(async (e) => { console.error(e); try { await c.query("rollback"); } catch {} process.exitCode = 1; })
+    .finally(() => c.end());
+}

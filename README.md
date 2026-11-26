@@ -24,9 +24,25 @@ Sign in by picking a person on the login screen (demo mode). Try:
 - **Arjun Nair** (Inspector): open `/field` on a phone-width window
 - **Elena Petrova** (Sadara client): sees only Sadara's sites, scaffolds, issued quotes and invoices
 
-## Supabase
+## Deploy (Supabase + Vercel)
 
-Point `DATABASE_URL` at the project's session pooler connection string, set `DB_LOCAL=0`, then run `npm run db:migrate` and `npm run db:seed`.
+Supabase project **rgs-onesite** (`fufccfjjvlnbbqtyytqn`, region ap-south-1) already has every migration in `supabase/migrations` applied. It holds no data yet.
+
+1. In Supabase: **Connect → Session pooler**. Copy the connection string and put in the database password.
+2. In Vercel, import this repo and set the environment variables:
+   - `DATABASE_URL` the pooler string, `DB_LOCAL=0`
+   - `AUTH_SECRET` (random, e.g. `openssl rand -base64 32`), `AUTH_MODE=demo`
+   - `AI_MODE=mock` (or `live` with `ANTHROPIC_API_KEY`)
+   - `CRON_SECRET` (random) for the workflow and watcher crons
+   - `STORAGE_MODE=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STORAGE_BUCKET=documents` (create a **private** bucket named `documents`)
+   - once only: `ALLOW_SEED=1` and `SEED_SECRET` (random)
+3. After the first deploy, load the sample data once, then remove `ALLOW_SEED`:
+
+   ```bash
+   curl -X POST https://<your-app>.vercel.app/api/admin/seed -H "Authorization: Bearer $SEED_SECRET"
+   ```
+
+The seed endpoint refuses to run on a database that already has data. Vercel's free plan runs crons once a day at most; the 5-minute workflow tick needs a paid plan, or Supabase `pg_cron` calling `/api/workflows/tick`.
 
 ## AI
 

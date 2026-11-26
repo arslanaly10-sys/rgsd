@@ -1,16 +1,17 @@
+import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Mono, Pill, statusTone, Table, Td } from "@/components/ui";
 import { fmtDate, fmtSAR, L, type Loc } from "@/lib/format";
 import type { invoicesList } from "@/lib/queries";
 
-export async function InvoiceTable({ list, showClient = true }: { list: Awaited<ReturnType<typeof invoicesList>>; showClient?: boolean }) {
+export async function InvoiceTable({ list, showClient = true, linkBase = "/ops/billing/" }: { list: Awaited<ReturnType<typeof invoicesList>>; showClient?: boolean; linkBase?: string }) {
   const t = await getTranslations();
   const l = (await getLocale()) as Loc;
   return (
     <Table head={[t("cols.ref"), ...(showClient ? [t("cols.client")] : []), t("cols.site"), t("cols.period"), t("cols.total"), t("cols.due"), t("cols.status"), t("cols.zatca")]} empty={list.length ? undefined : t("app.none")}>
       {list.map((i) => (
         <tr key={i.id}>
-          <Td><Mono>{i.ref}</Mono></Td>
+          <Td><Link href={`${linkBase}${i.id}`} className="hover:text-brand"><Mono>{i.ref}</Mono></Link>{i.created_by_agent && <span className="ms-1"><Pill tone="dark">AI</Pill></span>}</Td>
           {showClient && <Td className="max-w-[220px] text-muted">{L(i, "client", l)}</Td>}
           <Td><Mono>{i.site_code ?? "—"}</Mono></Td>
           <Td className="whitespace-nowrap text-muted">{fmtDate(i.period_from, l)} – {fmtDate(i.period_to, l)}</Td>

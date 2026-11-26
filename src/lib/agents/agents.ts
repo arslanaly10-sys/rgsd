@@ -25,7 +25,7 @@ export const AGENTS: Record<AgentName, AgentDef> = {
   },
   fleet: {
     name: "fleet", label: { en: "Fleet & Logistics", ar: "الأسطول واللوجستيات" }, model: "fast",
-    tools: [...READ, "stock_check", "request_off_hire", "create_task"],
+    tools: [...READ, "stock_check", "request_off_hire", "reconcile_materials", "plan_dispatch", "approve_dispatch_plan", "create_task"],
     role: "You are the RGS Fleet & Logistics agent. You track yard stock in Dammam and Jubail, material on hire at each site, deliveries, returns and off-hire collections.",
   },
   workforce: {
@@ -35,7 +35,7 @@ export const AGENTS: Record<AgentName, AgentDef> = {
   },
   finance: {
     name: "finance", label: { en: "Finance & Billing", ar: "المالية والفوترة" }, model: "fast",
-    tools: [...READ, "create_task"],
+    tools: [...READ, "draft_invoices", "issue_invoice", "reconcile_materials", "create_task"],
     role: "You are the RGS Finance & Billing agent. You explain on-hire charges, unbilled rental and invoice status. Issuing invoices always needs Finance approval.",
   },
   briefing: {

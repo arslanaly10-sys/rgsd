@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
-import { Card, Mono, PageHeader, Pill, statusTone, Table, Td } from "@/components/ui";
+import { ButtonLink, Card, Mono, PageHeader, Pill, statusTone, Table, Td } from "@/components/ui";
+import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { daysUntil, fmtDate, fmtNum, fmtSAR, L, type Loc } from "@/lib/format";
 import { movementsUpcoming, onHireBySite, stockByYard } from "@/lib/queries";
@@ -11,7 +12,11 @@ export default async function Page() {
   const [stock, hire, moves] = await Promise.all([stockByYard(s), onHireBySite(s), movementsUpcoming(s)]);
   return (
     <>
-      <PageHeader title={t("nav.fleet")} sub={t("pages.fleetSub")} />
+      <PageHeader title={t("nav.fleet")} sub={t("pages.fleetSub")} actions={<>
+        <ButtonLink href="/ops/fleet/movements/new">Log delivery note</ButtonLink>
+        <ButtonLink href="/ops/fleet/dispatch" variant="ghost">Dispatch planner</ButtonLink>
+        <ButtonLink href="/ops/fleet/reconciliation" variant="ghost">Reconciliation</ButtonLink>
+      </>} />
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title={`${t("cols.yard")} · ${t("cols.onHire")}`}>
           <Table head={[t("cols.item"), "Dammam", "Jubail", t("cols.onHire"), "Utilisation"]}>
@@ -56,7 +61,7 @@ export default async function Page() {
             <Table head={[t("cols.ref"), t("cols.kind"), t("cols.site"), t("cols.when"), t("cols.vehicle"), t("cols.status")]}>
               {moves.map((m) => (
                 <tr key={m.ref}>
-                  <Td><Mono>{m.ref}</Mono>{m.dn && <div className="text-[11px] text-muted">{m.dn}</div>}</Td>
+                  <Td><Link href={`/ops/fleet/movements/${m.id}`} className="hover:text-brand"><Mono>{m.ref}</Mono></Link>{m.dn && <div className="text-[11px] text-muted">{m.dn}</div>}</Td>
                   <Td>{t(`types.${m.kind}`)}</Td>
                   <Td><Mono>{m.site_code ?? "—"}</Mono></Td>
                   <Td className="whitespace-nowrap">{fmtDate(m.scheduled_for, l)}</Td>
