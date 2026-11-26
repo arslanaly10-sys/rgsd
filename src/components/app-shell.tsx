@@ -29,6 +29,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
           {
             label: n("control"),
             items: [
+              { href: "/ops/tasks", label: n("tasks"), icon: "clipboard", badge: badges.tasks },
               { href: "/ops/approvals", label: n("approvals"), icon: "check", badge: badges.approvals },
               { href: "/ops/agents", label: n("agents"), icon: "spark" },
               { href: "/field", label: n("field"), icon: "phone" },

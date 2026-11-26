@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Session } from "@/lib/auth";
 import { daysUntil, fmtDate, fmtNum, L, type Loc } from "@/lib/format";
@@ -37,7 +38,7 @@ export async function ScaffoldRegister({ session, searchParams, basePath }: { se
       <Table head={[t("cols.tag"), t("cols.status"), t("cols.site"), t("cols.location"), t("cols.type"), t("cols.size"), t("cols.loadClass"), t("cols.lastInspected"), t("cols.nextDue")]} empty={list.length ? undefined : t("app.none")}>
         {list.map((x) => (
           <tr key={x.id} className="hover:bg-canvas/60">
-            <Td><Mono>{x.tag_no}</Mono>{x.open_defects > 0 && <span className="ms-2"><Pill tone="red">{x.open_defects} ⚠</Pill></span>}</Td>
+            <Td><Link href={`${basePath}/${x.tag_no}`} className="hover:text-brand"><Mono>{x.tag_no}</Mono></Link>{x.open_defects > 0 && <span className="ms-2"><Pill tone="red">{x.open_defects} ⚠</Pill></span>}</Td>
             <Td>
               <TagPill status={x.status} label={t(`tag.${x.status}`)} />
               {x.restrictions && <div className="mt-1 max-w-[220px] text-xs text-tag-yellow">{x.restrictions}</div>}

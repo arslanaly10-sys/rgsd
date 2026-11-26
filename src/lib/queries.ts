@@ -6,15 +6,16 @@ import { one, rows, withUser } from "./db";
 
 export async function navBadges(s: Session) {
   return withUser(s, async (db) => {
-    const r = await one<{ requests: number; overdue: number; expiring: number; approvals: number }>(
+    const r = await one<{ requests: number; overdue: number; expiring: number; approvals: number; tasks: number }>(
       db,
       `select
         (select count(*) from requests where status in ('new','triage'))::int requests,
         (select count(*) from scaffolds where status in ('green','yellow') and next_inspection_due < current_date)::int overdue,
         ((select count(*) from certifications where expires_on <= current_date + 30) +
          (select count(*) from workers where iqama_expiry <= current_date + 30))::int expiring,
-        (select count(*) from approval_requests where status = 'pending' and $1 = any(approver_roles))::int approvals`,
-      [s.role],
+        (select count(*) from approval_requests where status = 'pending' and $1 = any(approver_roles))::int approvals,
+        (select count(*) from tasks where status = 'open' and (assignee_role = $1 or assignee_id = $2))::int tasks`,
+      [s.role, s.id],
     );
     return r!;
   });
