@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* Layout concept: dark "control room" rail + light working canvas; RGS orange marks actions and the active place. */
+@theme {
+  --color-brand: #f9441a;          /* RGS orange (rgsksa.com) */
+  --color-brand-600: #dc3510;
+  --color-brand-50: #fff3ee;
+  --color-ink: #141922;            /* rail + headings */
+  --color-ink-2: #1f2633;
+  --color-canvas: #f5f6f8;         /* page */
+  --color-panel: #ffffff;
+  --color-line: #e3e6eb;
+  --color-muted: #5f6b7a;
+  --color-tag-green: #15803d;
+  --color-tag-green-bg: #e7f6ec;
+  --color-tag-yellow: #a16207;
+  --color-tag-yellow-bg: #fdf4d7;
+  --color-tag-red: #c81e1e;
+  --color-tag-red-bg: #fdeaea;
+  --font-display: "Poppins", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--color-canvas); color: var(--color-ink); font-family: var(--font-sans); }
+html[dir="rtl"] body { font-family: "IBM Plex Sans Arabic", var(--font-sans); }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
+html[dir="rtl"] h1, html[dir="rtl"] h2, html[dir="rtl"] h3 { font-family: "IBM Plex Sans Arabic", var(--font-display); }
+.tabular { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+.eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+html[dir="rtl"] .eyebrow { letter-spacing: 0; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

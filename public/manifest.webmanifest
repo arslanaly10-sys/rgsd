@@ -1,0 +1,9 @@
+{
+  "name": "RGS OneSite",
+  "short_name": "OneSite",
+  "start_url": "/field",
+  "display": "standalone",
+  "background_color": "#141922",
+  "theme_color": "#141922",
+  "icons": [{ "src": "/brand/rgs-logo.png", "sizes": "134x134", "type": "image/png" }]
+}
