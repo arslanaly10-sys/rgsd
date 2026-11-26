@@ -68,6 +68,17 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
             { href: "/ops/agents", label: n("agents"), icon: "spark" },
             { href: "/field", label: n("field"), icon: "phone" },
           ] },
+          ...(session.role === "admin" ? [{ label: n("stage1"), items: [
+            { href: "/ops/admin", label: n("reviewHub"), icon: "spark" },
+            { href: "/ops/admin/design", label: n("designSystem"), icon: "doc" },
+            { href: "/ops/admin/data-model", label: n("dataModel"), icon: "menu" },
+            { href: "/ops/admin/permissions", label: n("permissionMatrix"), icon: "check" },
+            { href: "/ops/admin/access", label: n("accessTester"), icon: "people" },
+            { href: "/ops/admin/states", label: n("interfaceStates"), icon: "clipboard" },
+            { href: "/ops/admin/architecture", label: n("architecture"), icon: "pin" },
+            { href: "/ops/admin/people", label: n("people"), icon: "people" },
+            { href: "/ops/admin/outbox", label: n("outbox"), icon: "inbox" },
+          ] as NavItem[] }] : []),
         ]
       : [
           { label: n("workspace"), items: [
@@ -109,6 +120,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
             { href: "/client/support", label: n("support"), icon: "inbox", badge: badges.tickets },
             { href: "/client/help", label: n("helpCenter"), icon: "spark" },
             { href: "/client/contacts", label: n("contacts"), icon: "people" },
+            ...(session.role === "client_admin" ? [{ href: "/client/people", label: n("people"), icon: "people" } as NavItem] : []),
           ] },
         ];
 
@@ -139,6 +151,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
               <Icon name="globe" className="size-3.5" /> {t("app.language")}
             </button>
           </form>
+          <Link href="/account/security" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-white/60 hover:bg-white/10 hover:text-white">{n("security")}</Link>
           <form action={signOut}>
             <button className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-white/60 hover:bg-white/10 hover:text-white">
               <Icon name="out" className="size-3.5" /> {t("app.signOut")}

@@ -153,8 +153,12 @@ export const mockProvider: Provider = {
       const content: ToolUseBlock[] = p.map((x) => ({ type: "tool_use", id: `mock_${Date.now()}_${seq++}`, name: x.name, input: x.input }));
       return { content, stopReason: "tool_use", model: "mock-rgs-1", usage, mode: "mock" };
     }
-    const help =
-      locale === "ar"
+    const client = req.mockHints?.agent === "concierge";
+    const help = client
+      ? locale === "ar"
+        ? "يمكنني مساعدتك في: مشاريعك وتقدمها، ما ينتظر توقيعك، حالة بطاقات السقالات في مواقعك، المستخلصات وكشف الحساب، عروض الأسعار المبدئية، وفتح تذاكر الدعم. جرّب: «ما الذي ينتظر توقيعي؟»"
+        : "I can help with your projects and progress, what's waiting for your signature, scaffold tags on your sites, claims and your statement of account, indicative quotes, and support tickets. Try: “What's waiting for my signature?”"
+      : locale === "ar"
         ? "يمكنني مساعدتك في: حالة السقالات والبطاقات، الفحوصات المستحقة، عروض الأسعار المبدئية، طلبات إنهاء الإيجار، المخزون، الشهادات المنتهية، والإجراءات. جرّب: «ما السقالات الحمراء في صدارة؟»"
         : "I can help with scaffold and tag status, inspections due, indicative quotes, off-hire requests, yard stock, expiring certificates and procedures. Try: “Which scaffolds are red at Sadara?”";
     return { content: [{ type: "text", text: help }], stopReason: "end_turn", model: "mock-rgs-1", usage, mode: "mock" };

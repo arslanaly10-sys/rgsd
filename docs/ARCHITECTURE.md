@@ -297,3 +297,11 @@ After the MVP: Oracle and M365 live adapters, ZATCA onboarding, the full design 
 5. Data residency and Aramco contractor requirements for production.
 6. Inspection checklist format RGS uses today, and the tagging scheme (green/yellow/red or other).
 7. Logo files in vector format and the final product name.
+
+## 13. Phase D additions (implemented)
+
+- **Identity:** email one-time codes (hashed with a server pepper, 10 min, 5 attempts, throttled, no account discovery), RFC 6238 authenticator MFA with secrets in a separate server-only table (`auth_factors`, no RLS policy), invitations (hashed single-use tokens, 7 days), session versioning for sign-out-everywhere and instant disable, sign-in audit (`login_events`).
+- **Channels:** outbox table `outbound_messages`; adapters for Resend, WhatsApp Cloud API and Unifonic that switch on by key; notifications fan out by person, role or company to each person's chosen channels; secrets redacted at rest.
+- **Stage 1 review:** admin-only pages read from the live catalogue; the access tester proves RLS per person per table inside a rolled-back transaction.
+- **Hardening:** HSTS, CSP, frame-deny, nosniff, referrer and permissions policies; no `x-powered-by`.
+- **Quality gates:** `evals/` (32 cases, safety must be 100%), CI on GitHub Actions.

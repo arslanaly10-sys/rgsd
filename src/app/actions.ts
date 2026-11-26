@@ -8,7 +8,7 @@ import { one, withSystem } from "@/lib/db";
 export async function signInAs(formData: FormData) {
   if (process.env.AUTH_MODE && process.env.AUTH_MODE !== "demo") throw new Error("Demo sign-in is disabled");
   const id = String(formData.get("profileId") ?? "");
-  const p = await withSystem((db) => one<{ id: string; role: string; locale: string }>(db, "select id, role, locale from profiles where id = $1", [id]));
+  const p = await withSystem((db) => one<{ id: string; role: string; locale: string }>(db, "select id, role, locale from profiles where id = $1 and status = 'active'", [id]));
   if (!p) redirect("/login");
   await createSession(p.id);
   // Keep a language chosen on the login screen; otherwise use the person's saved preference.

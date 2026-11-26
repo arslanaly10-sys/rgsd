@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: rgs
+          POSTGRES_PASSWORD: rgs
+          POSTGRES_DB: rgs_onesite
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rgs" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://rgs:rgs@localhost:5432/rgs_onesite
+      DB_LOCAL: "1"
+      AUTH_SECRET: ci-only-secret-not-for-production
+      AUTH_MODE: demo
+      AI_MODE: mock
+      CRON_SECRET: ci-cron-secret
+      OUT: test-results
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run lint
+      - name: Unit checks (TOTP vectors)
+        run: npx tsx scripts/selftest.ts
+      - name: Migrate and seed
+        run: npm run db:reset
+      - name: Build
+        run: npm run build
+      - name: Install Playwright
+        run: npm i --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+      - name: Start app
+        run: (npx next start -p 3100 > server.log 2>&1 &) && npx --yes wait-on http://localhost:3100/login --timeout 60000
+      - name: End-to-end suites
+        run: npm run test:e2e
+      - name: Agent evals
+        run: npm run db:reset && npm run evals
+      - name: Server log on failure
+        if: failure()
+        run: tail -200 server.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 14

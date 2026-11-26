@@ -10,7 +10,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/migrate.ts --reset && tsx scripts/seed.ts",
-    "test:e2e": "bash tests/run-all.sh"
+    "test:e2e": "bash tests/run-all.sh",
+    "evals": "node evals/run.cjs",
+    "selftest": "tsx scripts/selftest.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.14.0",

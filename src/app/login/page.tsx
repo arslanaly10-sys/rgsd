@@ -1,16 +1,23 @@
 import Image from "next/image";
 import { getLocale, getTranslations } from "next-intl/server";
 import { signInAs, toggleLocale } from "@/app/actions";
+import { requestCodeAction, verifyCodeAction, verifyMfaAction } from "@/app/auth-actions";
+import { Flash } from "@/components/ui";
+import { getPendingMfa } from "@/lib/auth";
+import { authMode } from "@/lib/identity";
 import { rows, withSystem } from "@/lib/db";
 
 type P = { id: string; full_name: string; full_name_ar: string | null; role: string; title: string | null; company: string | null; company_ar: string | null };
 
-export default async function Login() {
+export default async function Login({ searchParams }: { searchParams: Promise<{ step?: string; email?: string; dev?: string; msg?: string }> }) {
+  const sp = await searchParams;
+  const mode = authMode();
+  const pendingMfa = sp.step === "mfa" && (await getPendingMfa());
   const t = await getTranslations();
   const locale = (await getLocale()) as "en" | "ar";
-  const people = await withSystem((db) =>
+  const people = mode !== "demo" ? [] : await withSystem((db) =>
     rows<P>(db, `select p.id, p.full_name, p.full_name_ar, p.role, p.title, c.name company, c.name_ar company_ar
-                 from profiles p left join client_companies c on c.id = p.client_company_id
+                 from profiles p left join client_companies c on c.id = p.client_company_id where p.status = 'active'
                  order by (p.client_company_id is not null), array_position(array['ops_manager','estimator','inspector','site_supervisor','yard_logistics','hse_training','finance','admin','client_admin','client_user'], p.role)`),
   );
   const staff = people.filter((p) => !p.role.startsWith("client_"));
@@ -70,11 +77,40 @@ export default async function Login() {
         </div>
         <div className="mx-auto w-full max-w-xl flex-1 py-8">
           <h2 className="text-2xl font-semibold">{t("login.title")}</h2>
-          <p className="mt-2 text-sm text-muted">{t("login.subtitle")}</p>
+          <Flash msg={sp.msg} />
+          <div className="mt-6 rounded-2xl border border-line bg-panel p-5">
+            {pendingMfa ? (
+              <form action={verifyMfaAction} className="grid gap-3">
+                <label className="text-sm font-medium" htmlFor="mfa">{locale === "ar" ? "أدخل الرمز من تطبيق المصادقة" : "Enter the 6-digit code from your authenticator app"}</label>
+                <input id="mfa" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required autoFocus className="rounded-lg border border-line px-3 py-2 text-center font-mono text-xl tracking-[0.4em]" />
+                <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">{locale === "ar" ? "تحقق" : "Verify"}</button>
+              </form>
+            ) : sp.step === "code" && sp.email ? (
+              <form action={verifyCodeAction} className="grid gap-3">
+                <input type="hidden" name="email" value={sp.email} />
+                <p className="text-sm text-muted">{locale === "ar" ? `إذا كان ${sp.email} مسجلاً لدينا فقد أرسلنا إليه رمزاً من 6 أرقام صالحاً لمدة 10 دقائق.` : `If ${sp.email} has access, we've emailed it a 6-digit code. It expires in 10 minutes.`}</p>
+                {sp.dev && <p role="note" className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-600">{locale === "ar" ? "وضع العرض (لا يوجد مزود بريد): الرمز" : "Demo mode (no email provider connected): your code is"} <strong className="font-mono" data-dev-code>{sp.dev}</strong></p>}
+                <label className="text-sm font-medium" htmlFor="code">{locale === "ar" ? "رمز الدخول" : "Sign-in code"}</label>
+                <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required autoFocus className="rounded-lg border border-line px-3 py-2 text-center font-mono text-xl tracking-[0.4em]" />
+                <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">{locale === "ar" ? "دخول" : "Sign in"}</button>
+                <a href="/login" className="text-center text-xs text-muted underline">{locale === "ar" ? "استخدم بريداً آخر أو اطلب رمزاً جديداً" : "Use another email or get a new code"}</a>
+              </form>
+            ) : (
+              <form action={requestCodeAction} className="grid gap-3">
+                <label className="text-sm font-medium" htmlFor="email">{locale === "ar" ? "البريد الإلكتروني للعمل" : "Work email"}</label>
+                <input id="email" name="email" type="email" autoComplete="email" required placeholder="name@company.com" className="rounded-lg border border-line px-3 py-2" dir="ltr" />
+                <button className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">{locale === "ar" ? "أرسل رمز الدخول" : "Email me a sign-in code"}</button>
+                <p className="text-xs text-muted">{locale === "ar" ? "لا كلمات مرور. الوصول بدعوة فقط." : "No passwords. Access is by invitation only."}</p>
+              </form>
+            )}
+          </div>
+          {mode === "demo" && <>
+          <p className="mt-8 text-sm text-muted">{t("login.subtitle")}</p>
           <h3 className="eyebrow mt-8 mb-3">{t("login.staff")}</h3>
           <div className="grid gap-2 sm:grid-cols-2">{staff.map((p) => <Person key={p.id} p={p} />)}</div>
           <h3 className="eyebrow mt-8 mb-3">{t("login.clients")}</h3>
           <div className="grid gap-2 sm:grid-cols-2">{clients.map((p) => <Person key={p.id} p={p} />)}</div>
+          </>}
         </div>
       </section>
     </div>

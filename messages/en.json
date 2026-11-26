@@ -82,7 +82,18 @@
     "help": "Help",
     "support": "Support",
     "contacts": "Contact directory",
-    "helpCenter": "Help centre"
+    "helpCenter": "Help centre",
+    "stage1": "Stage 1 review",
+    "reviewHub": "Review hub",
+    "designSystem": "Design system",
+    "dataModel": "Data model",
+    "permissionMatrix": "Permission matrix",
+    "accessTester": "Access tester",
+    "interfaceStates": "Interface states",
+    "architecture": "Architecture",
+    "people": "People & access",
+    "outbox": "Message outbox",
+    "security": "Security"
   },
   "kpi": {
     "activeSites": "Active sites",

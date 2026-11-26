@@ -82,7 +82,18 @@
     "help": "المساعدة",
     "support": "الدعم",
     "contacts": "دليل جهات الاتصال",
-    "helpCenter": "مركز المساعدة"
+    "helpCenter": "مركز المساعدة",
+    "stage1": "مراجعة المرحلة 1",
+    "reviewHub": "مركز المراجعة",
+    "designSystem": "نظام التصميم",
+    "dataModel": "نموذج البيانات",
+    "permissionMatrix": "مصفوفة الصلاحيات",
+    "accessTester": "اختبار الوصول",
+    "interfaceStates": "حالات الواجهة",
+    "architecture": "البنية",
+    "people": "الأشخاص والوصول",
+    "outbox": "صندوق الرسائل الصادرة",
+    "security": "الأمان"
   },
   "kpi": {
     "activeSites": "المواقع النشطة",
