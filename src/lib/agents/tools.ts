@@ -6,6 +6,7 @@ import { daysUntil, fmtNum, fmtSAR } from "@/lib/format";
 import { estimateRequest } from "@/lib/workflows/estimate";
 import { executeDispatchPlan, planDispatch, reconcile } from "@/lib/fleet";
 import { draftInvoices, issueInvoice } from "@/lib/billing";
+import { awaitingMe, listProjects, listSignoffs, raiseInstruction } from "@/lib/projects";
 import { activeRates, price, SCAFFOLD_TYPES, Scope, takeoff } from "@/lib/estimating";
 import { expiries, onHireBySite, opsKpis, scaffolds, siteSummaries, stockByYard } from "@/lib/queries";
 
@@ -391,7 +392,45 @@ const issue_invoice = def({
   },
 });
 
-export const TOOLS = { reconcile_materials, plan_dispatch, approve_dispatch_plan, draft_invoices, issue_invoice, estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
+const project_status = def({
+  name: "project_status",
+  description: "Status of projects (waterproofing, insulation, scaffolding): progress vs time, revised contract value, blocked dependencies, slipping milestones and pending sign-offs. Optional project ref like PRJ-26-001.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/).optional() }),
+  async run(ctx, i) {
+    const list = (await listProjects(ctx.session)).filter((p) => !i.project_ref || p.ref === i.project_ref);
+    if (!list.length) return { projects: [], brief_en: i.project_ref ? `I can't find ${i.project_ref} in your access.` : "No projects in your access.", brief_ar: "لا توجد مشاريع ضمن صلاحياتك." };
+    const en = list.map((p) => `• ${p.ref} ${p.name}: ${p.progress_pct}% installed vs ${p.time_pct}% of time · revised value ${fmtSAR(p.revised_value, "en")}${p.blocked_deps ? ` · ${p.blocked_deps} blocked dependency(ies)` : ""}${p.overdue_milestones ? ` · ${p.overdue_milestones} slipping milestone(s)` : ""}${p.pending_signoffs ? ` · ${p.pending_signoffs} sign-off(s) pending` : ""}`);
+    const ar = list.map((p) => `• ${p.ref} ${p.name_ar ?? p.name}: منجز ${p.progress_pct}% مقابل ${p.time_pct}% من المدة · القيمة المعدلة ${fmtSAR(p.revised_value, "ar")}${p.pending_signoffs ? ` · ${p.pending_signoffs} توقيع معلق` : ""}`);
+    return { projects: list, brief_en: en.join("\n"), brief_ar: ar.join("\n") };
+  },
+});
+
+const my_signoffs = def({
+  name: "my_signoffs",
+  description: "Items waiting for a client signature (measurement sheets, variations, hold points, completion). For a client user: what needs their own signature.",
+  schema: z.object({}),
+  async run(ctx) {
+    const all = await listSignoffs(ctx.session, { status: "pending" });
+    const mine = ctx.session.isStaff ? all : all.filter((so) => awaitingMe(ctx.session, so));
+    if (!mine.length) return { signoffs: [], brief_en: ctx.session.isStaff ? "No sign-offs are waiting on clients." : "Nothing is waiting for your signature.", brief_ar: "لا يوجد ما ينتظر توقيعك." };
+    const line = (so: (typeof mine)[number]) => `• ${so.title}${so.amount ? ` (${fmtSAR(so.amount, "en")})` : ""}: needs ${so.required_roles.filter((r) => !so.approvals.some((a) => a.role === r)).map((r) => r.replace("client_", "")).join(" + ")}${so.due_date ? `, due ${so.due_date}` : ""}`;
+    return { signoffs: mine, brief_en: `${mine.length} item(s) waiting${ctx.session.isStaff ? " on clients" : " for your signature"}:\n${mine.map(line).join("\n")}\nOpen My sign-offs to review and sign.`, brief_ar: `${mine.length} عنصر بانتظار التوقيع. افتح صفحة التوقيعات.` };
+  },
+});
+
+const raise_instruction = def({
+  name: "raise_instruction",
+  description: "Record a site instruction from the client on a project (extra work, change of scope, rework). RGS then acknowledges it or prices it as a variation.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/), title: z.string().min(5).max(200), description: z.string().max(2000).optional() }),
+  async run(ctx, i) {
+    const p = (await listProjects(ctx.session)).find((x) => x.ref === i.project_ref);
+    if (!p) return { error: "not_found", brief_en: `I can't find ${i.project_ref} in your access.`, brief_ar: `لا أجد ${i.project_ref}.` };
+    const r = await raiseInstruction(ctx.session, { projectId: p.id, title: i.title, description: i.description });
+    return { ref: r.ref, brief_en: `Instruction ${r.ref} recorded on ${p.ref}: “${i.title}”. RGS will acknowledge it or send a priced variation for your approval.`, brief_ar: `تم تسجيل التعليمات ${r.ref} على ${p.ref}.` };
+  },
+});
+
+export const TOOLS = { project_status, my_signoffs, raise_instruction, reconcile_materials, plan_dispatch, approve_dispatch_plan, draft_invoices, issue_invoice, estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
 export type ToolName = keyof typeof TOOLS;
 
 export function toolSpecs(names: readonly ToolName[]) {

@@ -5,6 +5,7 @@
  */
 import { Client } from "pg";
 import { loadEnv } from "./env";
+import { seedProjects } from "./seed-projects";
 
 loadEnv();
 
@@ -445,7 +446,8 @@ export async function seed(client: Client): Promise<Record<string, string>> {
 
   // ── Agent autonomy policies (tiered by risk) ──
   const staffAll = ["admin", "ops_manager", "estimator", "site_supervisor", "inspector", "yard_logistics", "hse_training", "finance"];
-  const everyone = [...staffAll, "client_admin", "client_user"];
+  const clientAll = ["client_admin", "client_user", "client_consultant", "client_hse", "client_finance"];
+  const everyone = [...staffAll, ...clientAll];
   const policies: [string, number, string[], string[], string[], string][] = [
     ["search_knowledge", 0, everyone, [], [], "Search procedures, specs and past work with citations"],
     ["query_scaffolds", 0, everyone, [], [], "Scaffold register with tags and inspection dates (client users see their own sites only)"],
@@ -457,6 +459,9 @@ export async function seed(client: Client): Promise<Record<string, string>> {
     ["create_task", 1, staffAll, [], [], "Create a task or reminder"],
     ["remember", 1, staffAll, [], [], "Save client or site memory"],
     ["create_request", 1, everyone, [], [], "Log a client scaffold request"],
+    ["project_status", 0, everyone, [], [], "Project progress, value, dependencies and sign-offs"],
+    ["my_signoffs", 0, everyone, [], [], "Items waiting for client signatures"],
+    ["raise_instruction", 1, ["admin", "ops_manager", "estimator", "site_supervisor", "client_admin", "client_user", "client_consultant"], [], [], "Record a client site instruction"],
     ["reconcile_materials", 0, staffAll, [], [], "Compare delivered, returned and on-hire quantities per site"],
     ["plan_dispatch", 1, ["admin", "ops_manager", "yard_logistics"], [], [], "Draft tomorrow's delivery and collection plan"],
     ["draft_invoices", 1, ["admin", "finance", "ops_manager"], [], [], "Draft rental invoices for unbilled on-hire days"],
@@ -484,6 +489,9 @@ export async function seed(client: Client): Promise<Record<string, string>> {
   // ── Channel messages (sample inbound) ──
   await insert("channel_messages", { org_id: org, client_company_id: cc.aramco, channel: "whatsapp", direction: "in", from_addr: "+9665XXXXXX12", body: "Salam, we need cantilever scaffold under cellar deck Karan for valve change, 8m long 2 lifts, crew change Thursday. Can you send price?", created_at: ts(-1, 7) });
   await insert("channel_messages", { org_id: org, client_company_id: cc.sadara, channel: "email", direction: "in", from_addr: "planner@sadara.example", to_addr: "rfq@rgsksa.example", subject: "RFQ – E-417 bundle pull access, TA 2027", body: "Dear RGS, please quote access scaffolding for E-417 bundle pull per attached drawing. Working height 9 m, footprint 6 x 4 m. Regards, Maintenance Planning", attachments: [{ name: "E-417-GA.pdf", kind: "drawing" }], created_at: ts(-3, 10) });
+
+  // ── Phase A: multi-service projects (waterproofing, insulation, scaffolding) ──
+  await seedProjects({ db, insert, day, ts, int, org, rc, cc, sites, jobs, people });
 
   // Clear audit noise from seeding.
   await db.query("delete from audit_log");

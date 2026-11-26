@@ -63,6 +63,10 @@ function plan(text: string, tools: Set<string>, agent: string): Plan {
 
   const reqRef = text.match(/\bRQ-\d{2}-\d{4}\b/i)?.[0]?.toUpperCase();
   if (reqRef && /estimate|quote|price|draft|take.?off|سعّر|سعر|عرض/i.test(text)) { add("estimate_request", { request_ref: reqRef }); if (p.length) return p; }
+  const prjRef = text.match(/\bPRJ-\d{2}-\d{3}\b/i)?.[0]?.toUpperCase();
+  if (/sign.?off|signature|waiting for me|to sign|approve|توقيع|توقيعي/i.test(text) && !/tag|quote|invoice/i.test(text)) { add("my_signoffs"); if (p.length) return p; }
+  if (prjRef && /instruct|extra|add(itional)?|change|تعليمات|إضافة/i.test(text)) { add("raise_instruction", { project_ref: prjRef, title: text.replace(prjRef, "").replace(/^(please\s+)?(record|raise|issue)( an?)? (site )?instruction( to| on| for)?:?\s*/i, "").trim().slice(0, 190) || "Site instruction" }); if (p.length) return p; }
+  if (prjRef || /project|progress|milestone|waterproof|insulation|roof|basement|tank|مشروع|المشاريع|تقدم|عزل/i.test(text)) { add("project_status", prjRef ? { project_ref: prjRef } : {}); if (p.length) return p; }
   const invRef = text.match(/\bINV-\d{2}-\d{4}\b/i)?.[0]?.toUpperCase();
   if (invRef && /issue|send|أصدر/i.test(text)) { add("issue_invoice", { invoice_ref: invRef }); if (p.length) return p; }
   if (/reconcil|missing|loss|lost|shrink|variance|unbilled material|فرق|مفقود/i.test(text)) { add("reconcile_materials", { site_code: site }); if (p.length) return p; }

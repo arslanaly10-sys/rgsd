@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { signOut, toggleLocale } from "@/app/actions";
@@ -14,37 +15,59 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
   const groups: { label?: string; items: NavItem[] }[] =
     area === "ops"
       ? [
-          { items: [{ href: "/ops", label: n("overview"), icon: "home" }] },
-          {
-            label: n("operations"),
-            items: [
-              { href: "/ops/requests", label: n("requests"), icon: "inbox", badge: badges.requests },
-              { href: "/ops/scaffolds", label: n("scaffolds"), icon: "scaffold", badge: badges.overdue },
-              { href: "/ops/fleet", label: n("fleet"), icon: "truck" },
-              { href: "/ops/workforce", label: n("workforce"), icon: "people", badge: badges.expiring },
-              { href: "/ops/billing", label: n("finance"), icon: "money" },
-              { href: "/ops/sites", label: n("sites"), icon: "pin" },
-            ],
-          },
-          {
-            label: n("control"),
-            items: [
-              { href: "/ops/tasks", label: n("tasks"), icon: "clipboard", badge: badges.tasks },
-              { href: "/ops/approvals", label: n("approvals"), icon: "check", badge: badges.approvals },
-              { href: "/ops/agents", label: n("agents"), icon: "spark" },
-              { href: "/field", label: n("field"), icon: "phone" },
-            ],
-          },
+          { label: n("workspace"), items: [
+            { href: "/ops", label: n("overview"), icon: "home" },
+            { href: "/ops/oversight", label: n("oversight"), icon: "spark" },
+            { href: "/ops/projects", label: n("projects"), icon: "clipboard" },
+            { href: "/ops/reports", label: n("reports"), icon: "doc" },
+          ] },
+          { label: n("delivery"), items: [
+            { href: "/ops/activity", label: n("activity"), icon: "inbox" },
+            { href: "/ops/progress", label: n("progress"), icon: "scaffold" },
+            { href: "/ops/milestones", label: n("milestones"), icon: "check" },
+            { href: "/ops/dependencies", label: n("dependencies"), icon: "pin" },
+          ] },
+          { label: n("customer"), items: [
+            { href: "/ops/requests", label: n("requests"), icon: "inbox", badge: badges.requests },
+            { href: "/ops/triage", label: n("triage"), icon: "menu" },
+            { href: "/ops/instructions", label: n("instructions"), icon: "doc" },
+            { href: "/ops/signoffs", label: n("signoffs"), icon: "check" },
+          ] },
+          { label: n("quality"), items: [
+            { href: "/ops/scaffolds", label: n("inspections"), icon: "scaffold", badge: badges.overdue },
+            { href: "/ops/tasks", label: n("tasks"), icon: "clipboard", badge: badges.tasks },
+          ] },
+          { label: n("operations"), items: [
+            { href: "/ops/fleet", label: n("fleet"), icon: "truck" },
+            { href: "/ops/workforce", label: n("workforce"), icon: "people", badge: badges.expiring },
+            { href: "/ops/billing", label: n("finance"), icon: "money" },
+            { href: "/ops/sites", label: n("sites"), icon: "pin" },
+          ] },
+          { label: n("control"), items: [
+            { href: "/ops/approvals", label: n("approvals"), icon: "check", badge: badges.approvals },
+            { href: "/ops/agents", label: n("agents"), icon: "spark" },
+            { href: "/field", label: n("field"), icon: "phone" },
+          ] },
         ]
       : [
-          {
-            items: [
-              { href: "/client", label: n("overview"), icon: "home" },
-              { href: "/client/scaffolds", label: n("scaffolds"), icon: "scaffold" },
-              { href: "/client/requests", label: n("requests"), icon: "inbox" },
-              { href: "/client/billing", label: n("finance"), icon: "money" },
-            ],
-          },
+          { label: n("workspace"), items: [
+            { href: "/client", label: n("overview"), icon: "home" },
+            { href: "/client/projects", label: n("projects"), icon: "clipboard" },
+            { href: "/client/reports", label: n("reports"), icon: "doc" },
+          ] },
+          { label: n("delivery"), items: [
+            { href: "/client/activity", label: n("activity"), icon: "inbox" },
+            { href: "/client/progress", label: n("progress"), icon: "scaffold" },
+            { href: "/client/milestones", label: n("milestones"), icon: "check" },
+            { href: "/client/dependencies", label: n("dependencies"), icon: "pin", badge: badges.clientDeps },
+          ] },
+          { label: n("customer"), items: [
+            { href: "/client/requests", label: n("requests"), icon: "inbox" },
+            { href: "/client/instructions", label: n("instructions"), icon: "doc" },
+            { href: "/client/signoffs", label: n("mySignoffs"), icon: "check", badge: badges.signoffs },
+          ] },
+          { label: n("quality"), items: [{ href: "/client/scaffolds", label: n("inspections"), icon: "scaffold" }] },
+          { label: n("commercial"), items: [{ href: "/client/billing", label: n("finance"), icon: "money" }] },
         ];
 
   const name = locale === "ar" && session.fullNameAr ? session.fullNameAr : session.fullName;
@@ -99,8 +122,12 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
         <div className="fixed inset-x-0 bottom-0 top-[52px] z-30">{rail}</div>
       </details>
       <main className="min-w-0">
-        <div className="flex items-center justify-end gap-2 border-b border-line bg-panel/70 px-4 py-2 backdrop-blur md:px-8">
+        <div className="flex items-center justify-end gap-3 border-b border-line bg-panel/70 px-4 py-2 backdrop-blur md:px-8">
           <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-[11px] font-semibold text-brand-600">{t("app.sample")}</span>
+          <Link href={`/${area}/notifications`} className="relative inline-flex size-8 items-center justify-center rounded-full hover:bg-canvas" aria-label={`${n("notifications")}${badges.unread ? ` (${badges.unread})` : ""}`}>
+            <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9" /><path d="M10 19a2 2 0 0 0 4 0" /></svg>
+            {!!badges.unread && <span className="absolute -end-0.5 -top-0.5 min-w-4 rounded-full bg-brand px-1 text-center text-[10px] font-bold leading-4 text-white tabular">{badges.unread > 99 ? "99+" : badges.unread}</span>}
+          </Link>
         </div>
         <div className="mx-auto max-w-[1320px] px-4 pb-24 pt-6 md:px-8">{children}</div>
       </main>

@@ -3,6 +3,7 @@ import { getSessionById } from "@/lib/auth";
 import { draftInvoices } from "@/lib/billing";
 import { one, rows, withSystem } from "@/lib/db";
 import { reconcile } from "@/lib/fleet";
+import { refreshScaffoldDependencies } from "@/lib/projects";
 
 /*
  * Tag compliance watcher (runs daily by cron, or on demand).
@@ -91,9 +92,41 @@ export async function runMaterialsWatcher(orgId: string) {
   return { gaps: gaps.length, created };
 }
 
+/** Delivery watcher: cross-service dependencies, slipping milestones, overdue client prerequisites and sign-offs. */
+export async function runDeliveryWatcher(orgId: string) {
+  const deps = await refreshScaffoldDependencies(orgId);
+  return withSystem(async (db) => {
+    const week = new Date().toISOString().slice(0, 10);
+    const slip = await rows<{ id: string; client_company_id: string; ref: string; name: string; due: string; forecast: string | null }>(db,
+      `select m.id, m.client_company_id, p.ref, m.name, m.due_date::text due, m.forecast_date::text forecast from milestones m join projects p on p.id = m.project_id
+       where m.org_id = $1 and m.status = 'pending' and (m.due_date < current_date or m.forecast_date > m.due_date)`, [orgId]);
+    let created = 0;
+    for (const m of slip) {
+      const r = await db.query(`insert into tasks (org_id, client_company_id, title, assignee_role, due_date, priority, source, watcher, dedupe_key) values ($1,$2,$3,'ops_manager', current_date + 1, 'high', 'watcher', 'delivery', $4) on conflict (org_id, dedupe_key) do nothing`,
+        [orgId, m.client_company_id, `${m.ref}: milestone “${m.name}” ${m.due < week ? "is past due" : `forecast ${m.forecast} is after the committed ${m.due}`}. Recovery plan or tell the client.`, `milestone:${m.id}:${m.forecast ?? m.due}`]);
+      created += r.rowCount ?? 0;
+    }
+    const clientDeps = await rows<{ id: string; client_company_id: string; ref: string; description: string }>(db,
+      `select d.id, d.client_company_id, p.ref, d.description from dependencies d join projects p on p.id = d.project_id
+       where d.org_id = $1 and d.owner_side = 'client' and d.status in ('open','blocked') and d.due_date < current_date`, [orgId]);
+    for (const d of clientDeps) {
+      const r = await db.query(`insert into tasks (org_id, client_company_id, title, assignee_role, due_date, priority, source, watcher, dedupe_key) values ($1,$2,$3,'ops_manager', current_date, 'high', 'watcher', 'delivery', $4) on conflict (org_id, dedupe_key) do nothing`,
+        [orgId, d.client_company_id, `${d.ref}: client prerequisite overdue: ${d.description.slice(0, 90)}. Chase the client in writing (delay may be claimable).`, `clientdep:${d.id}:${week}`]);
+      if (r.rowCount) await db.query("insert into notifications (org_id, client_company_id, kind, title, title_ar, link) values ($1,$2,'dependency',$3,$4,'/client/dependencies')",
+        [orgId, d.client_company_id, `Action needed from your side on ${d.ref}: ${d.description.slice(0, 80)}`, `مطلوب إجراء من جانبكم على ${d.ref}`]);
+      created += r.rowCount ?? 0;
+    }
+    const lateSignoffs = (await rows<{ n: number }>(db, "select count(*)::int n from signoffs where org_id = $1 and status = 'pending' and due_date < current_date", [orgId]))[0]?.n ?? 0;
+    const summary = `${deps.met} scaffold dependency(ies) now met, ${deps.blocked} blocked; ${slip.length} slipping milestone(s); ${clientDeps.length} overdue client prerequisite(s); ${lateSignoffs} overdue sign-off(s); ${created} new task(s).`;
+    await db.query(`insert into agent_runs (org_id, agent, channel, status, input, output, mode, completed_at) values ($1,'briefing','cron','completed',$2,$3,'mock',now())`,
+      [orgId, JSON.stringify({ text: "Delivery watcher" }), JSON.stringify({ summary, reply: summary })]);
+    return { created, summary };
+  });
+}
+
 export async function runAllWatchers() {
   const orgs = await withSystem((db) => rows<{ id: string }>(db, "select id from organizations"));
   const out = [];
-  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id), billing: await runBillingWatcher(o.id), materials: await runMaterialsWatcher(o.id) });
+  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id), billing: await runBillingWatcher(o.id), materials: await runMaterialsWatcher(o.id), delivery: await runDeliveryWatcher(o.id) });
   return out;
 }

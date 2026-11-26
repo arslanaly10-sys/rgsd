@@ -27,13 +27,16 @@
     "hse_training": "HSE & Training",
     "finance": "Finance",
     "client_admin": "Client admin",
-    "client_user": "Client user"
+    "client_user": "Client user",
+    "client_consultant": "Consultant / PMC",
+    "client_hse": "Client HSE & QA/QC",
+    "client_finance": "Client finance & procurement"
   },
   "nav": {
     "overview": "Overview",
     "requests": "Requests & quotes",
     "scaffolds": "Scaffold register",
-    "inspections": "Inspections",
+    "inspections": "Inspections & tags",
     "fleet": "Fleet & logistics",
     "workforce": "Workforce & certs",
     "finance": "Billing",
@@ -45,7 +48,24 @@
     "documents": "Documents",
     "operations": "Operations",
     "control": "Control",
-    "tasks": "Tasks"
+    "tasks": "Tasks",
+    "workspace": "Workspace",
+    "delivery": "Delivery",
+    "customer": "Customer interface",
+    "quality": "Quality and safety",
+    "commercial": "Commercial",
+    "oversight": "Management oversight",
+    "projects": "Projects",
+    "reports": "Reports",
+    "activity": "What changed",
+    "progress": "Progress",
+    "milestones": "Commitments and milestones",
+    "dependencies": "Dependencies",
+    "triage": "Triage",
+    "instructions": "Instructions and changes",
+    "signoffs": "Client sign-offs",
+    "mySignoffs": "My sign-offs",
+    "notifications": "Notifications"
   },
   "kpi": {
     "activeSites": "Active sites",
@@ -137,7 +157,7 @@
   "client": {
     "welcome": "Welcome, {name}",
     "sub": "Live status of your scaffolds, requests and rental with RGS.",
-    "newRequest": "Request a scaffold",
+    "newRequest": "New request",
     "mySites": "Your sites",
     "openQuotes": "Quotes for you",
     "invoices": "Invoices",

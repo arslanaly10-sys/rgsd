@@ -27,13 +27,16 @@
     "hse_training": "السلامة والتدريب",
     "finance": "المالية",
     "client_admin": "مسؤول لدى العميل",
-    "client_user": "مستخدم لدى العميل"
+    "client_user": "مستخدم لدى العميل",
+    "client_consultant": "الاستشاري / إدارة المشروع",
+    "client_hse": "السلامة والجودة لدى العميل",
+    "client_finance": "المالية والمشتريات لدى العميل"
   },
   "nav": {
     "overview": "نظرة عامة",
     "requests": "الطلبات وعروض الأسعار",
     "scaffolds": "سجل السقالات",
-    "inspections": "الفحوصات",
+    "inspections": "الفحوصات والبطاقات",
     "fleet": "الأسطول والخدمات اللوجستية",
     "workforce": "القوى العاملة والشهادات",
     "finance": "الفوترة",
@@ -45,7 +48,24 @@
     "documents": "المستندات",
     "operations": "العمليات",
     "control": "التحكم",
-    "tasks": "المهام"
+    "tasks": "المهام",
+    "workspace": "مساحة العمل",
+    "delivery": "التنفيذ",
+    "customer": "واجهة العميل",
+    "quality": "الجودة والسلامة",
+    "commercial": "الشؤون التجارية",
+    "oversight": "الإشراف الإداري",
+    "projects": "المشاريع",
+    "reports": "التقارير",
+    "activity": "ما الذي تغير",
+    "progress": "التقدم",
+    "milestones": "الالتزامات والمراحل",
+    "dependencies": "الاعتماديات",
+    "triage": "الفرز",
+    "instructions": "التعليمات والتغييرات",
+    "signoffs": "توقيعات العملاء",
+    "mySignoffs": "توقيعاتي",
+    "notifications": "الإشعارات"
   },
   "kpi": {
     "activeSites": "المواقع النشطة",
@@ -137,7 +157,7 @@
   "client": {
     "welcome": "مرحباً، {name}",
     "sub": "الحالة المباشرة لسقالاتك وطلباتك وإيجاراتك مع RGS.",
-    "newRequest": "اطلب سقالة",
+    "newRequest": "طلب جديد",
     "mySites": "مواقعك",
     "openQuotes": "عروض الأسعار لك",
     "invoices": "الفواتير",

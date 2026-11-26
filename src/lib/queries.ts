@@ -4,6 +4,19 @@ import { one, rows, withUser } from "./db";
 
 /* All reads run as the signed-in user, so RLS scopes client users to their own company automatically. */
 
+export async function unreadCount(s: Session) {
+  return withUser(s, async (db) => (await one<{ n: number }>(db, "select count(*)::int n from notifications n where not exists (select 1 from notification_reads r where r.notification_id = n.id and r.user_id = $1)", [s.id]))!.n);
+}
+
+export async function clientBadges(s: Session) {
+  return withUser(s, async (db) => {
+    const r = await one<{ signoffs: number; clientDeps: number }>(db,
+      `select (select count(*) from signoffs so where so.status = 'pending' and $1 = any(so.required_roles) and not exists (select 1 from jsonb_array_elements(so.approvals) a where a->>'role' = $1))::int signoffs,
+              (select count(*) from dependencies d where d.owner_side = 'client' and d.status in ('open','blocked'))::int "clientDeps"`, [s.role]);
+    return { ...r!, unread: await unreadCount(s) };
+  });
+}
+
 export async function navBadges(s: Session) {
   return withUser(s, async (db) => {
     const r = await one<{ requests: number; overdue: number; expiring: number; approvals: number; tasks: number }>(
@@ -17,7 +30,7 @@ export async function navBadges(s: Session) {
         (select count(*) from tasks where status = 'open' and (assignee_role = $1 or assignee_id = $2))::int tasks`,
       [s.role, s.id],
     );
-    return r!;
+    return { ...r!, unread: await unreadCount(s) };
   });
 }
 

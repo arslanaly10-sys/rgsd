@@ -1,17 +1,20 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ButtonLink, Card, Kpi, Mono, PageHeader, Pill, statusTone } from "@/components/ui";
+import { ButtonLink, Card, Mono, PageHeader, Pill, statusTone } from "@/components/ui";
 import { TagBar } from "@/components/tag-bar";
 import { requireSession } from "@/lib/auth";
-import { fmtDate, fmtNum, fmtSAR, L, type Loc } from "@/lib/format";
-import { clientOverview, opsKpis, siteSummaries } from "@/lib/queries";
+import { fmtDate, fmtSAR, L, type Loc } from "@/lib/format";
+import { clientOverview, siteSummaries } from "@/lib/queries";
+import { listProjects } from "@/lib/projects";
+import { ClientOverviewKpis } from "@/components/delivery/pages";
+import { ProjectCards } from "@/components/delivery/views";
 
 export default async function ClientHome() {
   const s = await requireSession("client");
   const t = await getTranslations();
   const l = (await getLocale()) as Loc;
   // Same queries as staff; RLS limits every number to this client's company.
-  const [k, sites, o] = await Promise.all([opsKpis(s), siteSummaries(s), clientOverview(s)]);
+  const [sites, o, projects] = await Promise.all([siteSummaries(s), clientOverview(s), listProjects(s)]);
   const name = l === "ar" && s.fullNameAr ? s.fullNameAr : s.fullName;
   return (
     <>
@@ -20,12 +23,9 @@ export default async function ClientHome() {
         sub={`${(l === "ar" && s.companyNameAr) || s.companyName} · ${t("client.sub")}`}
         actions={<ButtonLink href="/client/requests">{t("client.newRequest")}</ButtonLink>}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label={t("kpi.scaffoldsUp")} value={fmtNum(k!.standing, l)} href="/client/scaffolds" />
-        <Kpi label={t("kpi.redTags")} value={fmtNum(k!.red, l)} tone={k!.red ? "red" : "default"} href="/client/scaffolds?status=red" />
-        <Kpi label={t("kpi.dueInspection")} value={fmtNum(k!.due, l)} tone={k!.due ? "yellow" : "default"} href="/client/scaffolds?due=1" />
-        <Kpi label={t("kpi.onHireDay")} value={fmtSAR(k!.onhire_day, l)} tone="brand" />
-      </div>
+      <ClientOverviewKpis s={s} />
+      <h2 className="eyebrow mt-8 mb-3">{t("nav.projects")}</h2>
+      <ProjectCards list={projects} base="/client" l={l} />
       <h2 className="eyebrow mt-8 mb-3">{t("client.mySites")}</h2>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {sites.map((x) => (
