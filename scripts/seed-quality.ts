@@ -78,7 +78,7 @@ export async function seedQuality(x: Ctx) {
 
   // ── HSE: man-hours, toolbox talks, permits with JSA, chemicals, waste ──
   const projs = await q<{ id: string; ref: string; client_company_id: string; site_id: string }>("select id, ref, client_company_id, site_id from projects");
-  const crew: Record<string, number> = { "PRJ-26-001": 14, "PRJ-26-002": 10, "PRJ-26-003": 22, "PRJ-26-004": 9 };
+  const crew: Record<string, number> = { "PRJ-26-001": 14, "PRJ-26-002": 10, "PRJ-26-003": 22, "PRJ-26-004": 9, "PRJ-26-005": 16, "PRJ-26-006": 12, "PRJ-26-007": 28 };
   for (const p of projs) {
     for (let mth = 2; mth >= 0; mth--) {
       const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - mth);

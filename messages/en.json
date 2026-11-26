@@ -93,7 +93,8 @@
     "architecture": "Architecture",
     "people": "People & access",
     "outbox": "Message outbox",
-    "security": "Security"
+    "security": "Security",
+    "map": "Projects map"
   },
   "kpi": {
     "activeSites": "Active sites",

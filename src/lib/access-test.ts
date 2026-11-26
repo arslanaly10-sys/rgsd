@@ -9,7 +9,7 @@ import { one, rows, withSystem, withUser } from "./db";
  */
 
 export const PROBE_TABLES = [
-  "projects", "project_areas", "signoffs", "variations", "instructions", "findings", "controlled_documents", "document_revisions", "warranties",
+  "projects", "project_areas", "project_photos", "signoffs", "variations", "instructions", "findings", "controlled_documents", "document_revisions", "warranties",
   "scaffolds", "inspections", "sites", "requests", "quotes", "invoices", "payment_claims", "payments", "credit_notes", "tickets", "ticket_messages",
   "workers", "certifications", "rate_items", "agent_runs", "approval_requests", "notifications", "invites", "outbound_messages", "login_events", "auth_otps", "auth_factors",
 ] as const;
@@ -22,10 +22,10 @@ const NOBODY = new Set(["auth_otps", "auth_factors"]);
 const OWN_ONLY = new Set(["outbound_messages", "login_events"]);
 // Rows a client may see only in some states.
 const CLIENT_HIDDEN: Record<string, string> = {
-  payment_claims: "status = 'draft'", credit_notes: "status <> 'issued'", ticket_messages: "internal",
+  project_photos: "not visible_to_client", payment_claims: "status = 'draft'", credit_notes: "status <> 'issued'", ticket_messages: "internal",
 };
 
-const HIDDEN_LABEL: Record<string, string> = { payment_claims: "no drafts", credit_notes: "issued only", ticket_messages: "no internal notes" };
+const HIDDEN_LABEL: Record<string, string> = { project_photos: "shared photos only", payment_claims: "no drafts", credit_notes: "issued only", ticket_messages: "no internal notes" };
 
 export type Probe = { table: string; visible: number | null; total: number; foreign: number | null; hidden: number | null; rule: string; ok: boolean; note?: string };
 

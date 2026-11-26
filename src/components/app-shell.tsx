@@ -19,6 +19,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
             { href: "/ops", label: n("overview"), icon: "home" },
             { href: "/ops/oversight", label: n("oversight"), icon: "spark" },
             { href: "/ops/projects", label: n("projects"), icon: "clipboard" },
+            { href: "/ops/map", label: n("map"), icon: "pin" },
             { href: "/ops/reports", label: n("reports"), icon: "doc" },
           ] },
           { label: n("delivery"), items: [
@@ -84,6 +85,7 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
           { label: n("workspace"), items: [
             { href: "/client", label: n("overview"), icon: "home" },
             { href: "/client/projects", label: n("projects"), icon: "clipboard" },
+            { href: "/client/map", label: n("map"), icon: "pin" },
             { href: "/client/reports", label: n("reports"), icon: "doc" },
           ] },
           { label: n("delivery"), items: [

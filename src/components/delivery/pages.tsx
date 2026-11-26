@@ -10,54 +10,228 @@ import { markAllReadAction, triageAction } from "@/lib/actions/delivery";
 import { SubmitButton } from "../submit-button";
 import { ButtonLink, Card, Flash, Kpi, Mono, PageHeader, Pill, statusTone, Table, Td } from "../ui";
 import { ActivityList, AreasTable, Bar, Commercials, DependencyList, health, InstructionList, MeasureButton, MilestoneList, NewInstructionForm, ProjectCards, ServiceChip, SignoffCard, tx } from "./views";
+import { BeforeAfter, KsaMap, PackageRows, PhotoCard, ProjectGrid, ProjectImage, servicePackages, SiteLayout, siteTypeLabel, stageLabel } from "../projects/visual";
+import { covers, listPhotos, projectExtras } from "@/lib/gallery";
+import { listContacts } from "@/lib/support";
+import { photoAction, uploadPhotoAction } from "@/lib/actions/gallery";
 
 type P = { s: Session; base: "/ops" | "/client"; msg?: string };
 const loc = async () => (await getLocale()) as Loc;
 
 export async function ProjectsPage({ s, base, msg }: P) {
   const l = await loc();
-  const list = await listProjects(s);
+  const [list, cov, ex] = await Promise.all([listProjects(s), covers(s), projectExtras(s)]);
   const by = (line: string) => list.filter((p) => p.service_lines.includes(line as never)).length;
   return (
     <>
-      <PageHeader title={tx(l, "Projects", "المشاريع")} sub={tx(l, "Contracts across scaffolding, waterproofing and insulation: progress against time, value and what is waiting.", "العقود في السقالات والعزل المائي والحراري: التقدم مقابل الوقت والقيمة وما ينتظر.")} />
+      <PageHeader title={tx(l, "Project directory", "دليل المشاريع")} sub={tx(l, "Every contract across scaffolding, waterproofing and insulation: where it is, how far along, and what is waiting.", "كل العقود في السقالات والعزل المائي والحراري: الموقع ونسبة الإنجاز وما ينتظر.")}
+        actions={<ButtonLink href={`${base}/map`} variant="ghost">{tx(l, "Map view", "عرض الخريطة")}</ButtonLink>} />
       <Flash msg={msg} />
       <div className="mb-4 flex flex-wrap gap-2">{SERVICE_LINES.map((x) => <span key={x} className="flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-1.5 text-sm"><ServiceChip line={x} l={l} /><span className="tabular text-muted">{by(x)}</span></span>)}</div>
-      <ProjectCards list={list} base={base} l={l} />
+      <ProjectGrid list={list} covers={cov} extras={ex} base={base} l={l} />
     </>
   );
 }
 
-export async function ProjectDetailPage({ s, base, msg, id }: P & { id: string }) {
+const TABS: [string, string, string][] = [["overview", "Overview", "نظرة عامة"], ["packages", "Service packages", "حزم الخدمات"], ["areas", "Site areas", "مناطق الموقع"], ["photos", "Progress photos", "صور التقدم"], ["commitments", "Commitments", "الالتزامات"], ["signoffs", "Sign-offs", "التوقيعات"], ["commercial", "Commercial", "التجاري"], ["changes", "Instructions & changes", "التعليمات والتغييرات"], ["activity", "Activity", "النشاط"]];
+
+export async function ProjectDetailPage({ s, base, msg, id, tab = "overview", line, stage }: P & { id: string; tab?: string; line?: string; stage?: string }) {
   const l = await loc();
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const p = await getProject(s, id);
   if (!p) notFound();
-  const [areas, ms, deps, ins, sos, act] = await Promise.all([listAreas(s, id), listMilestones(s, id), listDependencies(s, id), listInstructions(s, id), listSignoffs(s, { projectId: id }), activityFeed(s, { projectId: id, limit: 25 })]);
+  const [areas, ms, deps, ins, sos, act, photos, ex, contacts, openF] = await Promise.all([
+    listAreas(s, id), listMilestones(s, id), listDependencies(s, id), listInstructions(s, id), listSignoffs(s, { projectId: id }), activityFeed(s, { projectId: id, limit: 25 }),
+    listPhotos(s, id), projectExtras(s), listContacts(s),
+    withUser(s, (db) => rows<{ area_id: string; n: number }>(db, "select area_id, count(*)::int n from findings where project_id = $1 and area_id is not null and status not in ('closed','rejected') group by area_id", [id])),
+  ]);
+  const e = ex[id];
   const back = `${base}/projects/${id}`;
   const h = health(p);
   const staff = s.isStaff;
+  const cover = photos.find((x) => x.kind === "photo") ?? photos.find((x) => x.is_cover) ?? photos[0];
+  const team = contacts.filter((c) => c.project_ref === p.ref);
+  const pending = sos.filter((x) => x.status === "pending");
+  const upcoming = ms.filter((m) => m.status !== "achieved").slice(0, 5);
+  const openFindings = Object.fromEntries(openF.map((x) => [x.area_id, x.n]));
+  const counts: Record<string, number> = { packages: new Set(areas.map((a) => a.service_line)).size, areas: areas.length, photos: photos.length, commitments: ms.length, signoffs: sos.length, changes: ins.length };
+  const shown = photos.filter((x) => (!line || x.service_line === line) && (!stage || x.stage === stage));
+  const pairs = areas.map((a) => ({ a, b: photos.find((x) => x.area_id === a.id && x.stage === "before"), f: photos.find((x) => x.area_id === a.id && x.stage === "after") })).filter((x) => x.b && x.f);
+  const st = p.status === "active" ? tx(l, "In execution", "قيد التنفيذ") : p.status;
+  const tabHref = (t: string) => `${back}?tab=${t}`;
+  const field = "rounded-lg border border-line bg-panel px-3 py-2 text-sm";
   return (
     <>
-      <Link href={`${base}/projects`} className="text-sm text-muted hover:text-ink">← {tx(l, "Projects", "المشاريع")}</Link>
-      <PageHeader title={`${p.ref} · ${l === "ar" && p.name_ar ? p.name_ar : p.name}`} sub={`${l === "ar" && p.client_ar ? p.client_ar : p.client}${p.consultant_name ? ` · ${tx(l, "Consultant", "الاستشاري")}: ${p.consultant_name}` : ""} · PO ${p.po_number ?? "—"} · ${fmtDate(p.start_date, l)} – ${fmtDate(p.end_date, l)}`}
-        actions={<><Pill tone={h.tone}>{tx(l, h.en, h.ar)}</Pill>{p.service_lines.map((x) => <ServiceChip key={x} line={x} l={l} />)}<ButtonLink href={`/reports/${id}`} variant="ghost">{tx(l, "Weekly report", "التقرير الأسبوعي")}</ButtonLink>{staff && <MeasureButton projectId={id} back={back} />}</>} />
+      <nav className="mb-3 text-sm text-muted" aria-label="Breadcrumb"><Link href={base} className="hover:text-ink">{tx(l, "Overview", "نظرة عامة")}</Link> › <Link href={`${base}/projects`} className="hover:text-ink">{tx(l, "Project directory", "دليل المشاريع")}</Link> › <span className="text-ink">{l === "ar" && p.name_ar ? p.name_ar : p.name.split(" · ")[0]}</span></nav>
       <Flash msg={msg} />
-      {p.description && <p className="-mt-2 mb-4 max-w-[80ch] text-sm text-muted">{p.description}</p>}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label={tx(l, "Installed vs time", "المنجز مقابل المدة")} value={`${p.progress_pct}%`} hint={`${tx(l, "time elapsed", "من المدة")} ${p.time_pct}% · ${tx(l, "stage-weighted", "مرجح")} ${p.stage_pct}%`} tone={h.tone === "red" ? "red" : h.tone === "yellow" ? "yellow" : "brand"} />
-        <Kpi label={tx(l, "Revised contract value", "قيمة العقد المعدلة")} value={fmtSAR(p.revised_value, l)} hint={`${tx(l, "incl. approved VOs", "شامل أوامر التغيير")} ${fmtSAR(p.approved_vos, l)}`} />
-        <Kpi label={tx(l, "Certified by client", "معتمد من العميل")} value={fmtSAR(p.certified_value, l)} hint={`${tx(l, "installed", "منجز")} ${fmtSAR(p.installed_value, l)}`} />
-        <Kpi label={tx(l, "Waiting", "بالانتظار")} value={`${p.pending_signoffs}`} hint={`${tx(l, "sign-offs", "توقيعات")} · ${p.blocked_deps} ${tx(l, "blocked", "معطل")} · ${p.overdue_milestones} ${tx(l, "slipping", "متأخر")}`} tone={p.pending_signoffs || p.blocked_deps ? "yellow" : "default"} />
-      </div>
-      <div className="mt-4"><Card title={tx(l, "Progress by area", "التقدم حسب المنطقة")}><AreasTable areas={areas} l={l} staff={staff && ["admin", "ops_manager", "site_supervisor", "estimator"].includes(s.role)} back={back} /></Card></div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <Card title={tx(l, "Commitments & milestones", "الالتزامات والمراحل")}><MilestoneList items={ms} l={l} staff={staff} back={back} /></Card>
-        <Card title={tx(l, "Dependencies", "الاعتماديات")}><DependencyList items={deps} l={l} s={s} back={back} /></Card>
-        <Card title={tx(l, "Sign-offs", "التوقيعات")}>{sos.length ? <div className="grid gap-3">{sos.slice(0, 6).map((so) => <SignoffCard key={so.id} so={so} s={s} l={l} back={back} />)}</div> : <p className="text-sm text-muted">{tx(l, "None.", "لا يوجد.")}</p>}</Card>
-        <Card title={tx(l, "Commercial position", "الموقف التجاري")}><Commercials p={p} l={l} /><p className="mt-3 text-xs text-muted">{tx(l, `Defects liability ${p.dlp_months} months · advance ${p.advance_pct}% · retention ${p.retention_pct}% (SAMPLE terms)`, `فترة الضمان ${p.dlp_months} شهراً · الدفعة المقدمة ${p.advance_pct}% · المحتجزات ${p.retention_pct}%`)}</p></Card>
-        <Card title={tx(l, "Instructions & changes", "التعليمات والتغييرات")}><InstructionList items={ins} l={l} staff={staff} back={back} /></Card>
-        <Card title={tx(l, "What changed", "ما الذي تغير")}><ActivityList items={act} l={l} /></Card>
+      <section className="mb-4 grid gap-5 rounded-2xl border-b-2 border-ink bg-panel p-5 lg:grid-cols-[1.1fr_1fr_0.9fr]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5"><Mono>{p.ref}</Mono><Pill tone="green">{st}</Pill><Pill tone={h.tone === "green" ? "green" : h.tone === "red" ? "red" : "yellow"}>{tx(l, h.en, h.ar)}</Pill></div>
+          <h1 className="mt-2 text-2xl font-semibold leading-tight">{l === "ar" && p.name_ar ? p.name_ar : p.name.split(" · ")[0]}</h1>
+          <p className="mt-1 text-sm text-muted">{e?.city ?? "—"}{e?.site_type ? ` · ${siteTypeLabel(e.site_type, l)}` : ""}</p>
+          <p className="mt-1 text-sm text-muted">{l === "ar" && p.name_ar ? "" : p.name.split(" · ").slice(1).join(" · ")}</p>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-xs text-muted">{tx(l, "Client", "العميل")}</dt><dd className="font-semibold">{l === "ar" && p.client_ar ? p.client_ar : p.client}</dd></div>
+            <div><dt className="text-xs text-muted">{tx(l, "Data as of", "البيانات حتى")}</dt><dd className="font-semibold">{fmtDate(e?.last_update ?? new Date().toISOString(), l)}</dd></div>
+            <div><dt className="text-xs text-muted">{tx(l, "RGS representative", "ممثل RGS")}</dt><dd className="font-semibold">{e?.rgs_pm ?? "—"}</dd></div>
+            <div><dt className="text-xs text-muted">{tx(l, "Planned completion", "الإنجاز المخطط")}</dt><dd className="font-semibold">{fmtDate(p.end_date, l)}</dd></div>
+          </dl>
+          <div className="mt-4 flex flex-wrap gap-2"><ButtonLink href={`/reports/${id}`} variant="ghost">{tx(l, "Weekly report", "التقرير الأسبوعي")}</ButtonLink>{staff && <MeasureButton projectId={id} back={back} />}</div>
+        </div>
+        <div>
+          <div className="text-sm text-muted">{tx(l, "Overall progress", "التقدم الإجمالي")}</div>
+          <div className="text-5xl font-semibold tabular">{Math.round(p.stage_pct)}%</div>
+          <div className="mt-2 h-2 rounded-full bg-line"><div className="h-full rounded-full bg-brand" style={{ width: `${Math.round(p.stage_pct)}%` }} /></div>
+          <Link href={tabHref("areas")} className="mt-2 inline-block text-sm font-semibold text-brand underline">{tx(l, "Open progress", "عرض التقدم")}</Link>
+          <div className="mt-3"><PackageRows areas={areas} l={l} /></div>
+        </div>
+        {cover ? <ProjectImage url={cover.url} kind={cover.kind} alt={cover.caption} className="aspect-[4/3] rounded-xl lg:aspect-auto lg:min-h-64" l={l} /> : <div className="rounded-xl bg-canvas" />}
+      </section>
+      <nav className="mb-4 flex flex-wrap gap-x-5 gap-y-1 border-b border-line" aria-label={tx(l, "Project sections", "أقسام المشروع")}>
+        {TABS.map(([k, en, ar]) => (
+          <Link key={k} href={tabHref(k)} aria-current={tab === k ? "page" : undefined} className={`-mb-px border-b-2 px-1 py-2 text-sm font-medium ${tab === k ? "border-brand text-ink" : "border-transparent text-muted hover:text-ink"}`}>
+            {tx(l, en, ar)}{counts[k] != null && <span className="ms-1.5 rounded bg-canvas px-1.5 py-0.5 text-[11px] tabular text-muted">{counts[k]}</span>}
+          </Link>
+        ))}
+      </nav>
+
+      {tab === "overview" && (
+        <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+          <Card title={tx(l, "Site areas", "مناطق الموقع")} action={<Link href={tabHref("areas")} className="text-xs font-semibold text-brand">{tx(l, "Site areas", "مناطق الموقع")} →</Link>}><SiteLayout areas={areas} openFindings={openFindings} l={l} /></Card>
+          <Card title={tx(l, "Awaiting customer decisions", "بانتظار قرارات العميل")}>
+            {pending.length ? <ul className="divide-y divide-line">{pending.slice(0, 6).map((so) => (
+              <li key={so.id} className="flex items-start justify-between gap-3 py-2 text-sm"><div><div className="font-medium">{l === "ar" && so.title_ar ? so.title_ar : so.title}</div><div className="text-xs text-muted">{fmtDate(so.due_date, l)}</div></div><Pill tone={so.due_date && (daysUntil(so.due_date) ?? 0) < 0 ? "red" : "yellow"}>{so.due_date && (daysUntil(so.due_date) ?? 0) < 0 ? tx(l, "Overdue", "متأخر") : tx(l, "Pending", "معلق")}</Pill></li>
+            ))}</ul> : <p className="text-sm text-muted">{tx(l, "Nothing waiting on the customer.", "لا شيء بانتظار العميل.")}</p>}
+            <Link href={`${base}/signoffs`} className="mt-2 inline-block text-xs font-semibold text-brand">{tx(l, "All sign-offs", "كل التوقيعات")} →</Link>
+          </Card>
+          <Card title={tx(l, "Upcoming commitments", "الالتزامات القادمة")} action={<Link href={tabHref("commitments")} className="text-xs font-semibold text-brand">{tx(l, "Commitments", "الالتزامات")} →</Link>}>
+            <ul className="divide-y divide-line">{upcoming.map((m) => { const due = m.forecast_date ?? m.due_date; const late = (daysUntil(due) ?? 0) < 0; const risk = !late && m.forecast_date && m.forecast_date > m.due_date; return (
+              <li key={m.id} className="flex items-start justify-between gap-3 py-2 text-sm"><div><div className="font-medium">{l === "ar" && m.name_ar ? m.name_ar : m.name}</div><div className="text-xs text-muted">{fmtDate(due, l)}{m.service_line ? ` · ${tx(l, SERVICE_META[m.service_line as "scaffolding"]?.en ?? "", SERVICE_META[m.service_line as "scaffolding"]?.ar ?? "")}` : ""}</div></div><Pill tone={late ? "red" : risk ? "yellow" : "green"}>{late ? tx(l, "Late", "متأخر") : risk ? tx(l, "At risk", "معرض للتأخر") : tx(l, "On track", "في المسار")}</Pill></li>); })}</ul>
+          </Card>
+          <Card title={tx(l, "Assigned team", "الفريق المكلف")} action={<Link href={`${base}/contacts`} className="text-xs font-semibold text-brand">{tx(l, "Contact", "تواصل")} →</Link>}>
+            <ul className="grid gap-2">{team.map((c, i) => (
+              <li key={i} className="flex items-center gap-3 text-sm"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-semibold text-white">{c.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="font-medium">{c.name}{c.side === "rgs" && i === 0 ? <span className="ms-1 text-xs text-brand">{tx(l, "Your representative", "ممثلك")}</span> : null}</div><div className="truncate text-xs text-muted">{l === "ar" && c.role_label_ar ? c.role_label_ar : c.role_label}{c.side !== "rgs" ? ` · ${c.side === "client" ? tx(l, "Client", "العميل") : tx(l, "Consultant", "الاستشاري")}` : ""}</div></div></li>
+            ))}</ul>
+          </Card>
+          <Card title={tx(l, "Recent activity", "النشاط الأخير")} action={<Link href={tabHref("activity")} className="text-xs font-semibold text-brand">{tx(l, "Full timeline", "الجدول الزمني الكامل")} →</Link>}><ActivityList items={act.slice(0, 6)} l={l} /></Card>
+          <Card title={tx(l, "Progress photos", "صور التقدم")} action={<Link href={tabHref("photos")} className="text-xs font-semibold text-brand">{tx(l, "All photos", "كل الصور")} ({photos.length}) →</Link>}>
+            <div className="grid grid-cols-2 gap-2">{photos.slice(0, 4).map((ph) => <ProjectImage key={ph.id} url={ph.url} kind={ph.kind} alt={ph.caption} className="aspect-[16/10] rounded-lg" l={l} />)}</div>
+          </Card>
+          <details className="rounded-xl border border-line bg-panel p-4 text-sm xl:col-span-2">
+            <summary className="cursor-pointer font-semibold">{tx(l, "How is progress calculated?", "كيف يُحسب التقدم؟")}</summary>
+            <p className="mt-2 text-muted">{tx(l, "Each area moves through the stages of its service (for waterproofing: surface preparation 15%, primer 10%, membrane 45%, flood test 15%, protection 15%; insulation and scaffolding have their own). Area progress is weighted by its bill-of-quantities value; a service's share of the total value is its “% of effort”. Overall progress is the value-weighted sum. Payment uses only client-certified quantities, shown under Commercial.", "تمر كل منطقة بمراحل خدمتها (للعزل المائي: تجهيز السطح 15%، البرايمر 10%، الغشاء 45%، اختبار الغمر 15%، الحماية 15%). يُرجَّح تقدم كل منطقة بقيمتها في جدول الكميات؛ وحصة الخدمة من القيمة الإجمالية هي «نسبة الجهد». الدفع يعتمد فقط على الكميات المعتمدة من العميل.")}</p>
+          </details>
+        </div>
+      )}
+
+      {tab === "packages" && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {servicePackages(areas).map((x) => (
+            <Card key={x.line} title={tx(l, SERVICE_META[x.line as "scaffolding"].en, SERVICE_META[x.line as "scaffolding"].ar)}>
+              <div className="text-4xl font-semibold tabular">{x.pct}%</div>
+              <div className="mt-2 h-2 rounded-full bg-line"><div className="h-full rounded-full" style={{ width: `${x.pct}%`, background: SERVICE_META[x.line as "scaffolding"].accent }} /></div>
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm"><div><dt className="text-xs text-muted">{tx(l, "Share of effort", "نسبة الجهد")}</dt><dd className="font-semibold tabular">{x.weight}%</dd></div><div><dt className="text-xs text-muted">{tx(l, "BOQ value", "قيمة الكميات")}</dt><dd className="font-semibold tabular">{fmtSAR(x.value, l)}</dd></div><div><dt className="text-xs text-muted">{tx(l, "Areas", "المناطق")}</dt><dd className="font-semibold tabular">{x.done}/{x.areas} {tx(l, "complete", "مكتملة")}</dd></div></dl>
+              <ul className="mt-3 grid gap-1 text-xs">{areas.filter((a) => a.service_line === x.line).map((a) => <li key={a.id} className="flex justify-between gap-2"><span><Mono>{a.code}</Mono> {l === "ar" && a.name_ar ? a.name_ar : a.name}</span><span className="tabular text-muted">{Math.round(a.stage_pct)}%</span></li>)}</ul>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "areas" && (
+        <div className="grid gap-4">
+          <Card title={tx(l, "Site layout", "مخطط الموقع")}><SiteLayout areas={areas} openFindings={openFindings} l={l} /></Card>
+          <Card title={tx(l, "Progress by area", "التقدم حسب المنطقة")}><AreasTable areas={areas} l={l} staff={staff && ["admin", "ops_manager", "site_supervisor", "estimator"].includes(s.role)} back={back} /></Card>
+        </div>
+      )}
+
+      {tab === "photos" && (
+        <div className="grid gap-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Link href={tabHref("photos")} className={`rounded-full border px-3 py-1 ${!line && !stage ? "border-brand bg-brand-50 text-brand-600" : "border-line"}`}>{tx(l, "All", "الكل")} · {photos.length}</Link>
+            {[...new Set(photos.map((x) => x.service_line).filter(Boolean))].map((x) => <Link key={x} href={`${tabHref("photos")}&line=${x}`} className={`rounded-full border px-3 py-1 ${line === x ? "border-brand bg-brand-50" : "border-line"}`}><ServiceChip line={x!} l={l} /></Link>)}
+            {(["before", "during", "after"] as const).map((x) => <Link key={x} href={`${tabHref("photos")}&stage=${x}`} className={`rounded-full border px-3 py-1 ${stage === x ? "border-brand bg-brand-50 text-brand-600" : "border-line"}`}>{stageLabel(x, l)}</Link>)}
+          </div>
+          {photos.some((x) => x.kind === "illustration") && <p className="rounded-lg bg-canvas px-3 py-2 text-xs text-muted">{tx(l, "Images marked “Illustrative image” are drawings that show the type of work, not photos of this site. RGS site photos replace them as they are uploaded.", "الصور المعلَّمة «صورة توضيحية» رسومات توضح نوع العمل وليست صوراً لهذا الموقع، وتُستبدل بصور RGS من الموقع عند رفعها.")}</p>}
+          {pairs.length > 0 && <Card title={tx(l, "Before and after", "قبل وبعد")}><div className="grid gap-4 md:grid-cols-2">{pairs.slice(0, 2).map(({ a, b, f }) => <div key={a.id}><div className="mb-1 text-sm font-medium"><Mono>{a.code}</Mono> {a.name}</div><BeforeAfter before={b!} after={f!} l={l} /></div>)}</div></Card>}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {shown.map((ph) => (
+              <PhotoCard key={ph.id} ph={ph} l={l}>
+                {staff && <div className="mt-1 flex flex-wrap gap-1">{([["cover", "Make cover"], [ph.visible_to_client ? "hide" : "share", ph.visible_to_client ? "Hide from client" : "Share with client"], ["delete", "Remove"]] as const).filter(([op]) => !(op === "cover" && ph.is_cover)).map(([op, label]) => (
+                  <form key={op} action={photoAction}><input type="hidden" name="id" value={ph.id} /><input type="hidden" name="projectId" value={id} /><input type="hidden" name="op" value={op} /><SubmitButton className="rounded-md border border-line px-2 py-0.5 text-[11px] font-semibold" pending="…">{label}</SubmitButton></form>
+                ))}</div>}
+              </PhotoCard>
+            ))}
+          </div>
+          {staff && (
+            <Card title={tx(l, "Add site photos", "إضافة صور من الموقع")}>
+              <form action={uploadPhotoAction} className="grid gap-2 md:grid-cols-6">
+                <input type="hidden" name="projectId" value={id} />
+                <input type="file" name="file" required accept="image/jpeg,image/png,image/webp" aria-label="Photo" className="text-sm md:col-span-2" />
+                <input name="caption" required minLength={3} aria-label="Caption" placeholder="What and where (e.g. Tank T-104 cladding, north side)" className={`${field} md:col-span-4`} />
+                <select name="areaId" aria-label="Area" className={field}><option value="">{tx(l, "Whole project", "كامل المشروع")}</option>{areas.map((a) => <option key={a.id} value={a.id}>{a.code}</option>)}</select>
+                <select name="line" aria-label="Service" className={field}><option value="">Service…</option>{p.service_lines.map((x) => <option key={x} value={x}>{SERVICE_META[x].en}</option>)}</select>
+                <select name="stage" aria-label="Stage" className={field}><option value="">Stage…</option><option value="before">Before</option><option value="during">During</option><option value="after">After</option></select>
+                <input type="date" name="takenOn" aria-label="Taken on" className={field} />
+                <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="visible" value="1" defaultChecked /> Share with client</label>
+                <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="cover" value="1" /> Use as cover</label>
+                <SubmitButton className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white md:col-span-6 md:justify-self-start" pending="Uploading…">Upload photo</SubmitButton>
+              </form>
+              <p className="mt-2 text-xs text-muted">Real site photos are shown before illustrations and become the project cover automatically.</p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {tab === "commitments" && <div className="grid gap-4 xl:grid-cols-2"><Card title={tx(l, "Commitments & milestones", "الالتزامات والمراحل")}><MilestoneList items={ms} l={l} staff={staff} back={back} /></Card><Card title={tx(l, "Dependencies", "الاعتماديات")}><DependencyList items={deps} l={l} s={s} back={back} /></Card></div>}
+      {tab === "signoffs" && <Card title={tx(l, "Sign-offs", "التوقيعات")}>{sos.length ? <div className="grid gap-3">{sos.map((so) => <SignoffCard key={so.id} so={so} s={s} l={l} back={back} />)}</div> : <p className="text-sm text-muted">{tx(l, "None.", "لا يوجد.")}</p>}</Card>}
+      {tab === "commercial" && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card title={tx(l, "Commercial position", "الموقف التجاري")}><Commercials p={p} l={l} /><p className="mt-3 text-xs text-muted">{tx(l, `Defects liability ${p.dlp_months} months · advance ${p.advance_pct}% · retention ${p.retention_pct}% (SAMPLE terms)`, `فترة الضمان ${p.dlp_months} شهراً · الدفعة المقدمة ${p.advance_pct}% · المحتجزات ${p.retention_pct}%`)}</p></Card>
+          <div className="grid grid-cols-2 gap-3 content-start">
+            <Kpi label={tx(l, "Revised contract value", "قيمة العقد المعدلة")} value={fmtSAR(p.revised_value, l)} hint={`${tx(l, "incl. approved VOs", "شامل أوامر التغيير")} ${fmtSAR(p.approved_vos, l)}`} />
+            <Kpi label={tx(l, "Certified by client", "معتمد من العميل")} value={fmtSAR(p.certified_value, l)} hint={`${tx(l, "installed", "منجز")} ${fmtSAR(p.installed_value, l)}`} />
+            <Kpi label={tx(l, "Installed vs time", "المنجز مقابل المدة")} value={`${p.progress_pct}%`} hint={`${tx(l, "time elapsed", "من المدة")} ${p.time_pct}%`} tone={h.tone === "red" ? "red" : h.tone === "yellow" ? "yellow" : "brand"} />
+            <Kpi label={tx(l, "Progress claims", "المستخلصات")} value="→" href={`${base}/claims`} />
+          </div>
+        </div>
+      )}
+      {tab === "changes" && <Card title={tx(l, "Instructions & changes", "التعليمات والتغييرات")}><InstructionList items={ins} l={l} staff={staff} back={back} /></Card>}
+      {tab === "activity" && <Card title={tx(l, "What changed", "ما الذي تغير")}><ActivityList items={act} l={l} /></Card>}
+    </>
+  );
+}
+
+// ───────────────────────── Map ─────────────────────────
+export async function MapPage({ s, base, city }: P & { city?: string }) {
+  const l = await loc();
+  const [list, cov, ex] = await Promise.all([listProjects(s), covers(s), projectExtras(s)]);
+  const groups = new Map<string, { city: string; count: number; lat: number; lng: number; lines: string[] }>();
+  for (const p of list) {
+    const e = ex[p.id];
+    if (!e?.city || e.lat == null || e.lng == null) continue;
+    const g = groups.get(e.city) ?? { city: e.city, count: 0, lat: e.lat, lng: e.lng, lines: [] };
+    g.count++; g.lines = [...new Set([...g.lines, ...p.service_lines])];
+    groups.set(e.city, g);
+  }
+  const pins = [...groups.values()];
+  const inCity = city ? list.filter((p) => ex[p.id]?.city === city) : list;
+  return (
+    <>
+      <PageHeader title={tx(l, "Projects map", "خريطة المشاريع")} sub={tx(l, "Where RGS is working across the Kingdom. Select a city to see its projects.", "أين تعمل RGS في المملكة. اختر مدينة لعرض مشاريعها.")}
+        actions={<ButtonLink href={`${base}/projects`} variant="ghost">{tx(l, "Project directory", "دليل المشاريع")}</ButtonLink>} />
+      <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr]">
+        <Card><KsaMap pins={pins} selected={city} base={base} l={l} /><p className="mt-2 text-xs text-muted">{tx(l, "Simplified map for orientation; not to scale.", "خريطة مبسطة للتوجيه؛ ليست بمقياس رسم.")}</p></Card>
+        <div className="grid content-start gap-3">
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Link href={`${base}/map`} className={`rounded-full border px-3 py-1 ${!city ? "border-brand bg-brand-50 text-brand-600" : "border-line"}`}>{tx(l, "All cities", "كل المدن")} · {list.length}</Link>
+            {pins.map((p) => <Link key={p.city} href={`${base}/map?city=${encodeURIComponent(p.city)}`} className={`rounded-full border px-3 py-1 ${city === p.city ? "border-brand bg-brand-50 text-brand-600" : "border-line"}`}>{p.city} · {p.count}</Link>)}
+          </div>
+          {inCity.map((p) => { const c = cov[p.id]; return (
+            <Link key={p.id} href={`${base}/projects/${p.id}?tab=photos`} data-map-project={p.ref} className="grid grid-cols-[9rem_minmax(0,1fr)] overflow-hidden rounded-xl border border-line bg-panel transition hover:border-brand">
+              {c ? <ProjectImage url={c.url} kind={c.kind} alt={c.caption} className="h-full min-h-24" l={l} badge={false} /> : <div className="bg-canvas" />}
+              <div className="grid gap-1 p-3"><div className="flex flex-wrap items-center gap-1.5"><Mono>{p.ref}</Mono>{p.service_lines.map((x) => <ServiceChip key={x} line={x} l={l} />)}</div><div className="font-medium leading-snug">{l === "ar" && p.name_ar ? p.name_ar : p.name.split(" · ")[0]}</div><div className="text-xs text-muted">{ex[p.id]?.city} · {Math.round(p.stage_pct)}% · {tx(l, "photos", "صور")} →</div></div>
+            </Link>); })}
+        </div>
       </div>
     </>
   );

@@ -8,6 +8,8 @@ import { loadEnv } from "./env";
 import { seedProjects } from "./seed-projects";
 import { seedQuality } from "./seed-quality";
 import { seedCommercial } from "./seed-commercial";
+import { seedWest } from "./seed-west";
+import { seedGallery } from "./seed-gallery";
 
 loadEnv();
 
@@ -75,7 +77,7 @@ export async function seed(client: Client): Promise<Record<string, string>> {
 
   // ── Sites (named after public RGS projects) ──
   const siteDefs = [
-    { key: "karan", cc: cc.aramco, code: "KRN", name: "Karan 52/60 Auxiliary Platforms", name_ar: "منصات كران 52/60 المساعدة", type: "offshore", city: "Arabian Gulf", lat: 27.7, lng: 50.2, access: "Offshore: BOSIET + H2S + Aramco ID required. Crew change by boat from Tanajib, weather window dependent." },
+    { key: "karan", cc: cc.aramco, code: "KRN", name: "Karan 52/60 Auxiliary Platforms", name_ar: "منصات كران 52/60 المساعدة", type: "offshore", city: "Karan field", lat: 27.7, lng: 50.2, access: "Offshore: BOSIET + H2S + Aramco ID required. Crew change by boat from Tanajib, weather window dependent." },
     { key: "safaniyah", cc: cc.aramco, code: "SFN", name: "Safaniyah Offshore Platform", name_ar: "منصة السفانية البحرية", type: "offshore", city: "Safaniyah", lat: 28.0, lng: 48.8, access: "Offshore: BOSIET + H2S + Aramco ID. Hot work permits issued by platform PTW office." },
     { key: "sadara", cc: cc.sadara, code: "SDR", name: "Sadara Chemical Complex · Unit 4", name_ar: "مجمع صدارة للكيميائيات · الوحدة 4", type: "petrochemical", city: "Jubail", lat: 27.0, lng: 49.6, access: "Plant induction, gas test before entry, permit-to-work per job. Turnaround window in Q1." },
     { key: "bargash", cc: cc.bargash, code: "BRG", name: "Al Bargash Tower · Facade Mast Climbers", name_ar: "برج البرقاش · منصات الواجهات", type: "high_rise", city: "Khobar", lat: 26.28, lng: 50.21, access: "Urban site, deliveries 22:00–05:00 only (municipality). Mast climber operators need TÜV card." },
@@ -504,10 +506,14 @@ export async function seed(client: Client): Promise<Record<string, string>> {
 
   // ── Phase A: multi-service projects (waterproofing, insulation, scaffolding) ──
   await seedProjects({ db, insert, day, ts, int, org, rc, cc, sites, jobs, people });
+  // ── Western region: Jeddah, Makkah, Rabigh ──
+  await seedWest({ db, insert, day, org, people });
   // ── Phase B: quality, HSE, document control, warranties ──
   await seedQuality({ db, insert, day, ts, org, people });
   // ── Phase C: claims, payments, credit notes, support, contacts, crews ──
   await seedCommercial({ db, insert, day, ts, int, org, people });
+  // ── Visual project gallery (illustrations) and schematic site layouts ──
+  await seedGallery({ db, insert, day, org, people });
 
   // Clear audit noise from seeding.
   await db.query("delete from audit_log");

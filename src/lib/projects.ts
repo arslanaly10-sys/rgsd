@@ -44,12 +44,12 @@ export async function listProjects(s: Session) {
   return withUser(s, async (db) => (await rows<Omit<ProjectSummary, "revised_value" | "progress_pct" | "time_pct">>(db, `${PROJECT_SQL} order by p.ref`)).map(finish));
 }
 
-export type Area = { id: string; project_id: string; project_ref: string; service_line: ServiceLine; code: string; name: string; name_ar: string | null; system: string | null; uom: string; boq_qty: number; rate: number; installed_qty: number; approved_qty: number; stage: string; stage_pct: number; status: string; planned_start: string | null; planned_finish: string | null; last_entry: string | null };
+export type Area = { id: string; project_id: string; project_ref: string; service_line: ServiceLine; code: string; name: string; name_ar: string | null; system: string | null; uom: string; boq_qty: number; rate: number; installed_qty: number; approved_qty: number; stage: string; stage_pct: number; status: string; planned_start: string | null; planned_finish: string | null; last_entry: string | null; layout: { x: number; y: number; w: number; h: number; shape: "rect" | "tank" | "rack" } | null };
 
 export async function listAreas(s: Session, projectId?: string) {
   return withUser(s, (db) => rows<Area>(db,
     `select a.id, a.project_id, p.ref project_ref, a.service_line, a.code, a.name, a.name_ar, a.system, a.uom, a.boq_qty::float8 boq_qty, a.rate::float8 rate,
-            a.installed_qty::float8 installed_qty, a.approved_qty::float8 approved_qty, a.stage, a.stage_pct::float8 stage_pct, a.status, a.planned_start::text, a.planned_finish::text,
+            a.installed_qty::float8 installed_qty, a.approved_qty::float8 approved_qty, a.stage, a.stage_pct::float8 stage_pct, a.status, a.planned_start::text, a.planned_finish::text, a.layout,
             (select max(entry_date)::text from progress_entries e where e.area_id = a.id) last_entry
      from project_areas a join projects p on p.id = a.project_id where ($1::uuid is null or a.project_id = $1) order by p.ref, a.sort`, [projectId ?? null]));
 }
