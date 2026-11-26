@@ -249,16 +249,26 @@ Every integration implements a small interface and ships with a **CSV/Excel adap
 
 ## 10. Repository layout
 
+The MVP is **one Next.js app**, with agent, AI and workflow code in folders. That's faster to ship in a week; the folders can move into packages later without changing the code.
+
 ```
-apps/web            Next.js app (ops, client, field PWA, API routes)
-packages/agents     Agent definitions, tools, policies, supervisor
-packages/ai         Provider adapter (anthropic | gateway | mock), schemas
-packages/workflows  Durable step runner + watcher jobs
-packages/db         Supabase migrations, seed (SAMPLE data), typed client
-packages/integrations  Oracle, M365, ZATCA, WhatsApp, email adapters
-evals/              Agent eval suites + fixtures
-docs/               Architecture, ADRs, runbooks
+src/app/ops        RGS staff console
+src/app/client     Client portal (same queries; RLS scopes the data)
+src/app/field      Mobile field app (PWA)
+src/lib/db.ts      withUser() sets JWT claims + role per transaction so RLS applies; withSystem() for watchers
+src/lib/auth.ts    Demo persona sessions now; Supabase Auth later (same profile ids)
+src/lib/agents     Agent definitions, tools, policies, supervisor          (Day 2)
+src/lib/ai         Provider adapter: anthropic | gateway | mock            (Day 2)
+src/lib/workflows  Durable step runner + watchers                          (Day 2–6)
+supabase/migrations  Schema, RLS, audit. Runs on local Postgres and Supabase
+db/local           Role shim for plain local Postgres only
+scripts            migrate / seed (SAMPLE data)
+messages           en.json / ar.json
+evals              Agent eval suites                                       (Day 7)
 ```
+
+Data access: the app connects with a Postgres connection string and, per request, runs `set local role authenticated` plus
+`request.jwt.claims`. Every query then goes through the same RLS policies as Supabase's own API, on local Postgres and on Supabase alike.
 
 ---
 

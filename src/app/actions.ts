@@ -11,7 +11,9 @@ export async function signInAs(formData: FormData) {
   const p = await withSystem((db) => one<{ id: string; role: string; locale: string }>(db, "select id, role, locale from profiles where id = $1", [id]));
   if (!p) redirect("/login");
   await createSession(p.id);
-  (await cookies()).set("locale", p.locale, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  // Keep a language chosen on the login screen; otherwise use the person's saved preference.
+  const jar = await cookies();
+  if (!jar.get("locale")) jar.set("locale", p.locale, { path: "/", maxAge: 60 * 60 * 24 * 365 });
   redirect(p.role.startsWith("client_") ? "/client" : "/ops");
 }
 

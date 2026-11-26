@@ -101,7 +101,7 @@ export function Td({ children, className = "" }: { children: ReactNode; classNam
 }
 
 export function Mono({ children }: { children: ReactNode }) {
-  return <span className="font-mono text-[12.5px] font-medium tracking-tight" dir="ltr">{children}</span>;
+  return <span className="whitespace-nowrap font-mono text-[12.5px] font-medium tracking-tight" dir="ltr">{children}</span>;
 }
 
 export function DueLabel({ days, t }: { days: number | null; t: (k: string, v?: Record<string, number>) => string }) {
