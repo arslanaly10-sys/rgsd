@@ -46,12 +46,16 @@ export async function getSession(): Promise<Session | null> {
     return null;
   }
   if (!sub) return null;
+  return getSessionById(sub);
+}
+
+export async function getSessionById(id: string): Promise<Session | null> {
   const p = await withSystem((db) =>
     one<{
       id: string; org_id: string; role: Role; client_company_id: string | null; full_name: string; full_name_ar: string | null;
       title: string | null; email: string; locale: "en" | "ar"; company_name: string | null; company_name_ar: string | null;
     }>(db, `select p.*, c.name as company_name, c.name_ar as company_name_ar
-            from profiles p left join client_companies c on c.id = p.client_company_id where p.id = $1`, [sub]),
+            from profiles p left join client_companies c on c.id = p.client_company_id where p.id = $1`, [id]),
   );
   if (!p) return null;
   return {

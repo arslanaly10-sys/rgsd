@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { signOut, toggleLocale } from "@/app/actions";
 import type { Session } from "@/lib/auth";
+import { Copilot } from "./copilot";
 import { Icon, NavLinks, type NavItem } from "./nav-links";
 
 export async function AppShell({ session, area, badges = {}, children }: { session: Session; area: "ops" | "client"; badges?: Record<string, number>; children: ReactNode }) {
@@ -100,8 +101,9 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
         <div className="flex items-center justify-end gap-2 border-b border-line bg-panel/70 px-4 py-2 backdrop-blur md:px-8">
           <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-[11px] font-semibold text-brand-600">{t("app.sample")}</span>
         </div>
-        <div className="mx-auto max-w-[1320px] px-4 py-6 md:px-8">{children}</div>
+        <div className="mx-auto max-w-[1320px] px-4 pb-24 pt-6 md:px-8">{children}</div>
       </main>
+      <Copilot area={area} />
     </div>
   );
 }

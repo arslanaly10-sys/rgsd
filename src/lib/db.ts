@@ -44,12 +44,13 @@ export async function withUser<T>(actor: Actor, fn: (db: Db) => Promise<T>): Pro
  * Run as the system (bypasses RLS). Only for watchers, workflow internals and
  * session lookup. Never pass user-controlled scope without checking it first.
  */
-export async function withSystem<T>(fn: (db: Db) => Promise<T>, opts: { runId?: string } = {}): Promise<T> {
+export async function withSystem<T>(fn: (db: Db) => Promise<T>, opts: { runId?: string; actorId?: string } = {}): Promise<T> {
   const c = await pool.connect();
   try {
     await c.query("begin");
     await c.query("select set_config('request.jwt.claims', $1, true)", [
-      JSON.stringify({ actor_kind: "system", run_id: opts.runId ?? "" }),
+      // RLS is bypassed here; sub only records who the work is for in the audit log.
+      JSON.stringify({ sub: opts.actorId ?? "", actor_kind: opts.actorId ? "agent" : "system", run_id: opts.runId ?? "" }),
     ]);
     const out = await fn(c);
     await c.query("commit");

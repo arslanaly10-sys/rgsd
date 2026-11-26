@@ -34,7 +34,7 @@ export default async function ClientHome() {
             <div className="mt-1 font-medium">{L(x, "name", l)}</div>
             <div className="mt-3"><TagBar green={x.green} yellow={x.yellow} red={x.red} /></div>
             <div className="mt-2 flex gap-3 text-xs text-muted tabular">
-              <span>{x.green + x.yellow + x.red} tagged</span>
+              <span>{t("client.tagged", { count: x.green + x.yellow + x.red })}</span>
               {x.red > 0 && <span className="font-semibold text-tag-red">{t("client.redAtSite", { count: x.red })}</span>}
             </div>
           </Link>
