@@ -63,6 +63,17 @@ function plan(text: string, tools: Set<string>, agent: string): Plan {
 
   const reqRef = text.match(/\bRQ-\d{2}-\d{4}\b/i)?.[0]?.toUpperCase();
   if (reqRef && /estimate|quote|price|draft|take.?off|سعّر|سعر|عرض/i.test(text)) { add("estimate_request", { request_ref: reqRef }); if (p.length) return p; }
+  const cnRef = text.match(/\b(?:CN|DN)-\d{2}-\d{3}\b/i)?.[0]?.toUpperCase();
+  if (cnRef && /issue|send|أصدر/i.test(text)) { add("issue_credit_note", { ref: cnRef }); if (p.length) return p; }
+  if (/\b(ticket|complain|complaint|support)\b|تذكرة|شكوى/i.test(text) && /open|raise|log|create|new|افتح/i.test(text)) {
+    add("open_ticket", { subject: text.replace(/^(please\s+)?(open|raise|log|create)( an?| new)? (support )?ticket( about| for| on)?\s*/i, "").replace(/^[\s:–-]+/, "").trim().slice(0, 190) || "Support request", category: /bill|invoice|فاتور/i.test(text) ? "billing" : /safety|unsafe|سلامة/i.test(text) ? "safety" : /leak|defect|crack|تسرب|عيب/i.test(text) ? "defect" : "general", priority: /urgent|asap|عاجل/i.test(text) ? "urgent" : "normal" });
+    if (p.length) return p;
+  }
+  if (/statement|ageing|aging|outstanding|overdue invoice|balance|owe|كشف حساب|المستحق|الرصيد/i.test(text)) { add("statement_summary"); if (p.length) return p; }
+  if (/\bclaims?\b|retention|advance recover|ipc|certified|مستخلص|محتجز/i.test(text)) { add("claim_status", text.match(/\bPRJ-\d{2}-\d{3}\b/i) ? { project_ref: text.match(/\bPRJ-\d{2}-\d{3}\b/i)![0].toUpperCase() } : {}); if (p.length) return p; }
+  const emps = text.match(/\bRGS-\d{4}\b/gi)?.map((x) => x.toUpperCase());
+  if (site && emps?.length && /assign|deploy|send|move|عيّن|انقل/i.test(text)) { add("assign_crew", { site_code: site, employee_nos: emps, start_in_days: num(/in\s+(\d+)\s+days?/i, text) ?? 1 }); if (p.length) return p; }
+  if (site && /competen|qualified|cleared|eligible|can .{0,20}work|مؤهل|كفاءة/i.test(text)) { add("competency_check", emps?.length ? { site_code: site, employee_nos: emps } : { site_code: site }); if (p.length) return p; }
   const prjRef = text.match(/\bPRJ-\d{2}-\d{3}\b/i)?.[0]?.toUpperCase();
   if (/handover|ready (to|for) hand|dossier|تسليم/i.test(text) && prjRef) { add("handover_status", { project_ref: prjRef }); if (p.length) return p; }
   if (/\b(hse|safety|trir|ltifr|lti|man.?hours|toolbox|permit)\b|السلامة/i.test(text) && !/tag/i.test(text)) { add("hse_summary", prjRef ? { project_ref: prjRef } : {}); if (p.length) return p; }
@@ -153,11 +164,13 @@ export const mockProvider: Provider = {
 /** Mock routing used when AI_MODE=mock (the live router asks the fast model). */
 export function mockRoute(text: string, isStaff: boolean): string {
   if (!isStaff) return "concierge";
+  if (/\bclaims?\b|retention|statement of account|ageing|aging|credit note|debit note|\b(?:CN|DN)-\d{2}-\d{3}\b|مستخلص|كشف حساب/i.test(text)) return "finance";
+  if (/competen|qualified|assign .{0,30}RGS-\d{4}/i.test(text)) return "workforce";
   if (/quote|price|cost|estimate|tender|rfq|boq|سعر|عرض|مناقصة/i.test(text)) return "estimator";
   if (/tag|inspect|defect|\bred\b|\byellow\b|overdue|scaffold|فحص|بطاقة|أحمر|عيوب/i.test(text)) return "inspector";
   if (/reconcil|missing|loss|shrink|variance|route|stock|yard|hire|deliver|dispatch|truck|collect|low on|boards?\b|couplers?|مخزون|إيجار|توصيل|شاحن|ألواح/i.test(text)) return "fleet";
-  if (/cert|iqama|crew|worker|training|manpower|شهاد|إقام|عمال|تدريب/i.test(text)) return "workforce";
-  if (/invoice|billing|zatca|payment|فاتور|زاتكا|فوترة/i.test(text)) return "finance";
+  if (/competen|qualified|assign|cert|iqama|crew|worker|training|manpower|شهاد|إقام|عمال|تدريب/i.test(text)) return "workforce";
+  if (/invoice|billing|zatca|payment|claim|retention|statement|ageing|aging|outstanding|credit note|debit note|مستخلص|كشف حساب|فاتور|زاتكا|فوترة/i.test(text)) return "finance";
   if (/procedure|how|rule|standard|إجراء|كيف/i.test(text)) return "inspector";
   return "briefing";
 }

@@ -68,6 +68,7 @@ export async function issueInvoice(s: Session, ref: string) {
   await putFile(key, Buffer.from(xml, "utf8"), "application/xml");
   await withSystem(async (db) => {
     await db.query("update invoices set status='issued', issued_at=$2, zatca_uuid=$3, qr_tlv=$4, xml_path=$5 where id=$1", [inv.id, issuedAt, uuid, qr, key]);
+    await db.query("update payment_claims set status = 'invoiced' where invoice_id = $1", [inv.id]);
     for (const l of lines) if (l.source?.on_hire_id && l.source.to) await db.query("update on_hire set last_billed_until = greatest(coalesce(last_billed_until, $2::date), $2::date) where id = $1", [l.source.on_hire_id, l.source.to]);
     await db.query("insert into notifications (org_id, client_company_id, kind, title, title_ar, link) select org_id, client_company_id, 'invoice', $2, $3, '/client/billing' from invoices where id = $1",
       [inv.id, `New invoice ${ref}`, `فاتورة جديدة ${ref}`]);

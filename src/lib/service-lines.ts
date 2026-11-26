@@ -46,12 +46,13 @@ export function stagePct(line: ServiceLine, stage: string, partial = 1) {
 export const VO_FINANCE_THRESHOLD = 100_000; // SAR: above this a variation also needs client finance/procurement approval
 
 /** Which client roles must sign a given item. */
-export function requiredSigners(kind: "measurement" | "hold_point" | "variation" | "completion" | "inspection" | "document", amount = 0): string[] {
+export function requiredSigners(kind: "measurement" | "hold_point" | "variation" | "completion" | "inspection" | "document" | "claim", amount = 0): string[] {
   switch (kind) {
     case "variation": return amount > VO_FINANCE_THRESHOLD ? ["client_admin", "client_finance"] : ["client_admin"];
     case "measurement": return ["client_admin", "client_consultant"];
     case "hold_point": return ["client_consultant"];
     case "completion": return ["client_admin", "client_hse"];
+    case "claim": return ["client_admin", "client_finance"];
     default: return ["client_admin"];
   }
 }

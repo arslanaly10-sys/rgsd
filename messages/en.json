@@ -75,7 +75,14 @@
     "hse": "HSE",
     "documentControl": "Document control",
     "evidence": "Photos & evidence",
-    "docreview": "Document reviews"
+    "docreview": "Document reviews",
+    "claims": "Progress claims",
+    "creditNotes": "Credit & debit notes",
+    "statement": "Statement of account",
+    "help": "Help",
+    "support": "Support",
+    "contacts": "Contact directory",
+    "helpCenter": "Help centre"
   },
   "kpi": {
     "activeSites": "Active sites",

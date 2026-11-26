@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { withUser } from "@/lib/db";
+import { runSupportWatcher } from "@/lib/support";
 import { runComplianceWatcher, runDeliveryWatcher, runQualityWatcher } from "@/lib/watchers/compliance";
 
 export async function completeTask(formData: FormData) {
@@ -17,6 +18,7 @@ export async function runWatchersNow() {
   const r = await runComplianceWatcher(s.orgId);
   const d = await runDeliveryWatcher(s.orgId);
   const q = await runQualityWatcher(s.orgId);
+  const sp = await runSupportWatcher(s.orgId);
   revalidatePath("/ops", "layout");
-  redirect("/ops/tasks?msg=" + encodeURIComponent(`ok:Compliance: ${r.summary} Delivery: ${d.summary} Quality: ${q.summary}`));
+  redirect("/ops/tasks?msg=" + encodeURIComponent(`ok:Compliance: ${r.summary} Delivery: ${d.summary} Quality: ${q.summary} Support: ${sp.summary}`));
 }

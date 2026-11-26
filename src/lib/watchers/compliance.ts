@@ -4,6 +4,7 @@ import { draftInvoices } from "@/lib/billing";
 import { one, rows, withSystem } from "@/lib/db";
 import { reconcile } from "@/lib/fleet";
 import { refreshScaffoldDependencies } from "@/lib/projects";
+import { runSupportWatcher } from "@/lib/support";
 
 /*
  * Tag compliance watcher (runs daily by cron, or on demand).
@@ -157,6 +158,6 @@ export async function runQualityWatcher(orgId: string) {
 export async function runAllWatchers() {
   const orgs = await withSystem((db) => rows<{ id: string }>(db, "select id from organizations"));
   const out = [];
-  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id), billing: await runBillingWatcher(o.id), materials: await runMaterialsWatcher(o.id), delivery: await runDeliveryWatcher(o.id), quality: await runQualityWatcher(o.id) });
+  for (const o of orgs) out.push({ org: o.id, compliance: await runComplianceWatcher(o.id), billing: await runBillingWatcher(o.id), materials: await runMaterialsWatcher(o.id), delivery: await runDeliveryWatcher(o.id), quality: await runQualityWatcher(o.id), support: await runSupportWatcher(o.id) });
   return out;
 }

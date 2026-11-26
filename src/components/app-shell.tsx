@@ -51,8 +51,17 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
           { label: n("operations"), items: [
             { href: "/ops/fleet", label: n("fleet"), icon: "truck" },
             { href: "/ops/workforce", label: n("workforce"), icon: "people", badge: badges.expiring },
-            { href: "/ops/billing", label: n("finance"), icon: "money" },
             { href: "/ops/sites", label: n("sites"), icon: "pin" },
+          ] },
+          { label: n("commercial"), items: [
+            { href: "/ops/claims", label: n("claims"), icon: "money" },
+            { href: "/ops/billing", label: n("finance"), icon: "money" },
+            { href: "/ops/credit-notes", label: n("creditNotes"), icon: "doc" },
+            { href: "/ops/statement", label: n("statement"), icon: "clipboard" },
+          ] },
+          { label: n("help"), items: [
+            { href: "/ops/support", label: n("support"), icon: "inbox", badge: badges.tickets },
+            { href: "/ops/contacts", label: n("contacts"), icon: "people" },
           ] },
           { label: n("control"), items: [
             { href: "/ops/approvals", label: n("approvals"), icon: "check", badge: badges.approvals },
@@ -91,7 +100,16 @@ export async function AppShell({ session, area, badges = {}, children }: { sessi
             { href: "/client/evidence", label: n("evidence"), icon: "pin" },
             { href: "/client/docreview", label: n("docreview"), icon: "check", badge: badges.reviews },
           ] },
-          { label: n("commercial"), items: [{ href: "/client/billing", label: n("finance"), icon: "money" }] },
+          { label: n("commercial"), items: [
+            { href: "/client/claims", label: n("claims"), icon: "money" },
+            { href: "/client/billing", label: n("finance"), icon: "money" },
+            { href: "/client/statement", label: n("statement"), icon: "clipboard" },
+          ] },
+          { label: n("help"), items: [
+            { href: "/client/support", label: n("support"), icon: "inbox", badge: badges.tickets },
+            { href: "/client/help", label: n("helpCenter"), icon: "spark" },
+            { href: "/client/contacts", label: n("contacts"), icon: "people" },
+          ] },
         ];
 
   const name = locale === "ar" && session.fullNameAr ? session.fullNameAr : session.fullName;

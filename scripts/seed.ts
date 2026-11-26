@@ -7,6 +7,7 @@ import { Client } from "pg";
 import { loadEnv } from "./env";
 import { seedProjects } from "./seed-projects";
 import { seedQuality } from "./seed-quality";
+import { seedCommercial } from "./seed-commercial";
 
 loadEnv();
 
@@ -460,6 +461,11 @@ export async function seed(client: Client): Promise<Record<string, string>> {
     ["create_task", 1, staffAll, [], [], "Create a task or reminder"],
     ["remember", 1, staffAll, [], [], "Save client or site memory"],
     ["create_request", 1, everyone, [], [], "Log a client scaffold request"],
+    ["claim_status", 0, everyone, [], [], "Progress claims, retention held and advance recovered"],
+    ["statement_summary", 0, [...staffAll.filter((r) => r !== "inspector"), "client_admin", "client_finance"], [], [], "Statement of account and ageing"],
+    ["open_ticket", 1, everyone, [], [], "Open a support ticket or warranty claim"],
+    ["competency_check", 0, staffAll, [], [], "Check workers' certificates against a site's requirements"],
+    ["issue_credit_note", 3, ["admin", "finance", "ops_manager"], [], ["finance", "admin"], "Issue a credit or debit note to a client"],
     ["list_findings", 0, everyone, [], [], "Open findings and corrective actions"],
     ["raise_finding", 1, [...staffAll, "client_admin", "client_user", "client_consultant", "client_hse"], [], [], "Record a quality or safety finding"],
     ["hse_summary", 0, everyone, [], [], "Safety KPIs and HSE status"],
@@ -500,6 +506,8 @@ export async function seed(client: Client): Promise<Record<string, string>> {
   await seedProjects({ db, insert, day, ts, int, org, rc, cc, sites, jobs, people });
   // ── Phase B: quality, HSE, document control, warranties ──
   await seedQuality({ db, insert, day, ts, org, people });
+  // ── Phase C: claims, payments, credit notes, support, contacts, crews ──
+  await seedCommercial({ db, insert, day, ts, int, org, people });
 
   // Clear audit noise from seeding.
   await db.query("delete from audit_log");

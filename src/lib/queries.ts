@@ -10,18 +10,19 @@ export async function unreadCount(s: Session) {
 
 export async function clientBadges(s: Session) {
   return withUser(s, async (db) => {
-    const r = await one<{ signoffs: number; clientDeps: number; reviews: number; closeouts: number }>(db,
+    const r = await one<{ signoffs: number; clientDeps: number; reviews: number; closeouts: number; tickets: number }>(db,
       `select (select count(*) from signoffs so where so.status = 'pending' and $1 = any(so.required_roles) and not exists (select 1 from jsonb_array_elements(so.approvals) a where a->>'role' = $1))::int signoffs,
               (select count(*) from dependencies d where d.owner_side = 'client' and d.status in ('open','blocked'))::int "clientDeps",
               (case when $1 in ('client_consultant','client_admin','client_hse') then (select count(*) from controlled_documents where status = 'under_review') else 0 end)::int reviews,
-              (case when $1 in ('client_consultant','client_admin','client_hse') then (select count(*) from findings where status = 'verification' and (raised_side = 'client' or kind = 'ncr')) else 0 end)::int closeouts`, [s.role]);
+              (case when $1 in ('client_consultant','client_admin','client_hse') then (select count(*) from findings where status = 'verification' and (raised_side = 'client' or kind = 'ncr')) else 0 end)::int closeouts,
+              (select count(*) from tickets where status in ('waiting_client','resolved'))::int tickets`, [s.role]);
     return { ...r!, unread: await unreadCount(s) };
   });
 }
 
 export async function navBadges(s: Session) {
   return withUser(s, async (db) => {
-    const r = await one<{ requests: number; overdue: number; expiring: number; approvals: number; tasks: number; findings: number }>(
+    const r = await one<{ requests: number; overdue: number; expiring: number; approvals: number; tasks: number; findings: number; tickets: number }>(
       db,
       `select
         (select count(*) from requests where status in ('new','triage'))::int requests,
@@ -30,7 +31,8 @@ export async function navBadges(s: Session) {
          (select count(*) from workers where iqama_expiry <= current_date + 30))::int expiring,
         (select count(*) from approval_requests where status = 'pending' and $1 = any(approver_roles))::int approvals,
         (select count(*) from tasks where status = 'open' and (assignee_role = $1 or assignee_id = $2))::int tasks,
-        (select count(*) from findings where status in ('open','action_planned'))::int findings`,
+        (select count(*) from findings where status in ('open','action_planned'))::int findings,
+        (select count(*) from tickets where status in ('open','in_progress'))::int tickets`,
       [s.role, s.id],
     );
     return { ...r!, unread: await unreadCount(s) };

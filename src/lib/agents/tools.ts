@@ -8,6 +8,9 @@ import { executeDispatchPlan, planDispatch, reconcile } from "@/lib/fleet";
 import { draftInvoices, issueInvoice } from "@/lib/billing";
 import { awaitingMe, listProjects, listSignoffs, raiseInstruction } from "@/lib/projects";
 import { handoverReadiness, hseKpis, listDocuments, listFindings, raiseFinding } from "@/lib/quality";
+import { issueCreditNote, listClaims, statementOfAccount } from "@/lib/commercial";
+import { createTicket } from "@/lib/support";
+import { assignCrew, checkWorker, competencyMatrix } from "@/lib/workforce";
 import { activeRates, price, SCAFFOLD_TYPES, Scope, takeoff } from "@/lib/estimating";
 import { expiries, onHireBySite, opsKpis, scaffolds, siteSummaries, stockByYard } from "@/lib/queries";
 
@@ -499,7 +502,88 @@ const handover_status = def({
   },
 });
 
-export const TOOLS = { list_findings, raise_finding, hse_summary, document_status, handover_status, project_status, my_signoffs, raise_instruction, reconcile_materials, plan_dispatch, approve_dispatch_plan, draft_invoices, issue_invoice, estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
+const claim_status = def({
+  name: "claim_status",
+  description: "Progress claims per project: certified to date, claimed, retention held, advance recovered, and the next claim if submitted today.",
+  schema: z.object({ project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/).optional() }),
+  async run(ctx, i) {
+    const projects = (await listProjects(ctx.session)).filter((p) => !i.project_ref || p.ref === i.project_ref);
+    if (!projects.length) return { error: "not_found", brief_en: i.project_ref ? `I can't find ${i.project_ref} in your access.` : "No projects.", brief_ar: "لا توجد مشاريع." };
+    const claims = await listClaims(ctx.session);
+    const en = projects.map((p) => {
+      const mine = claims.filter((c) => c.project_id === p.id);
+      const held = mine.filter((c) => ["certified", "invoiced"].includes(c.status)).reduce((t, c) => t + Number(c.retention), 0);
+      const last = mine[0];
+      return `• ${p.ref}: ${mine.length} claim(s)${last ? `, latest ${last.ref} ${last.status} (net ${fmtSAR(last.net, "en")})` : ""}; certified ${fmtSAR(p.certified_value, "en")}; retention held ${fmtSAR(held, "en")}`;
+    });
+    return { brief_en: en.join("\n"), brief_ar: en.join("\n") };
+  },
+});
+
+const statement_summary = def({
+  name: "statement_summary",
+  description: "Statement of account: balance, open invoices and ageing (current, 1–30, 31–60, 61–90, 90+ days). Clients see their own company only.",
+  schema: z.object({}),
+  async run(ctx) {
+    const st = await statementOfAccount(ctx.session, ctx.session.clientCompanyId ?? undefined);
+    const b = st.buckets;
+    return { ...st, lines: undefined,
+      brief_en: `Outstanding ${fmtSAR(st.total_outstanding, "en", 2)} across ${st.open.length} open invoice(s). Ageing: current ${fmtSAR(b.current, "en")}, 1–30 days ${fmtSAR(b.d30, "en")}, 31–60 ${fmtSAR(b.d60, "en")}, 61–90 ${fmtSAR(b.d90, "en")}, over 90 ${fmtSAR(b.over90, "en")}.${st.open.filter((o) => o.days > 0).map((o) => `\n• ${o.ref} ${o.client}: ${fmtSAR(o.outstanding, "en")} overdue ${o.days} day(s)`).join("")}`,
+      brief_ar: `المستحق ${fmtSAR(st.total_outstanding, "ar", 2)} على ${st.open.length} فاتورة مفتوحة.` };
+  },
+});
+
+const open_ticket = def({
+  name: "open_ticket",
+  description: "Open a support ticket (defect, billing, safety, portal, general). For warranty claims ask the user to use the Support page so they can pick the warranty.",
+  schema: z.object({ subject: z.string().min(5).max(200), category: z.enum(["defect", "billing", "safety", "portal", "general"]).optional(), priority: z.enum(["low", "normal", "high", "urgent"]).optional(), project_ref: z.string().regex(/^PRJ-\d{2}-\d{3}$/).optional() }),
+  async run(ctx, i) {
+    if (ctx.session.isStaff) return { error: "staff", brief_en: "Tickets are opened by clients. Use Support to log one on a client's behalf.", brief_ar: "التذاكر يفتحها العملاء." };
+    const pid = i.project_ref ? (await listProjects(ctx.session)).find((p) => p.ref === i.project_ref)?.id : undefined;
+    const t = await createTicket(ctx.session, { category: i.category ?? "general", priority: i.priority ?? "normal", subject: i.subject, body: i.subject, projectId: pid });
+    return { ref: t.ref, brief_en: `Ticket ${t.ref} opened. RGS will reply within ${t.respondH} h and aim to resolve within ${t.resolveH} h.`, brief_ar: `تم فتح التذكرة ${t.ref}. سترد RGS خلال ${t.respondH} ساعة.` };
+  },
+});
+
+const competency_check = def({
+  name: "competency_check",
+  description: "Check whether workers (by employee number, or everyone at a site) have the valid certificates the site requires (offshore: BOSIET, H2S, Aramco ID; scaffolders: scaffold card).",
+  schema: z.object({ site_code: z.string().regex(/^[A-Z]{3}$/), employee_nos: z.array(z.string()).max(30).optional() }),
+  async run(ctx, i) {
+    const m = await competencyMatrix(ctx.session);
+    const list = m.filter((w) => (i.employee_nos?.length ? i.employee_nos.includes(w.employee_no) : w.site_code === i.site_code));
+    const site = (await siteSummaries(ctx.session)).find((x) => x.code === i.site_code);
+    if (!site) return { error: "not_found", brief_en: `Site ${i.site_code} not found.`, brief_ar: "الموقع غير موجود." };
+    const res = list.map((w) => ({ w, c: checkWorker(w, Object.entries(w.cells).filter(([, v]) => v.state !== "missing").map(([k, v]) => ({ kind: k, expires_on: v.expires_on, verified: v.verified })), { code: site.code, type: site.type }) }));
+    const blocked = res.filter((r) => !r.c.ok);
+    return { checked: res.length, blocked: blocked.length,
+      brief_en: `${res.length} worker(s) checked for ${i.site_code}: ${res.length - blocked.length} cleared, ${blocked.length} blocked.${blocked.slice(0, 10).map((r) => `\n• ${r.w.employee_no} ${r.w.full_name}: ${r.c.blockers.join(", ")}`).join("")}${res.filter((r) => r.c.ok && r.c.warnings.length).slice(0, 5).map((r) => `\n• ${r.w.employee_no} warning: ${r.c.warnings.join(", ")}`).join("")}`,
+      brief_ar: `تم فحص ${res.length} عامل: ${blocked.length} غير مؤهلين.` };
+  },
+});
+
+const assign_crew = def({
+  name: "assign_crew",
+  description: "Assign workers (employee numbers) to a site from a start date. Workers who fail the site's competency check are refused.",
+  schema: z.object({ site_code: z.string().regex(/^[A-Z]{3}$/), employee_nos: z.array(z.string()).min(1).max(30), start_in_days: z.number().int().min(0).max(60).optional() }),
+  async run(ctx, i) {
+    const r = await assignCrew(ctx.session, { siteCode: i.site_code, employeeNos: i.employee_nos, startInDays: i.start_in_days });
+    return { ...r, brief_en: `${r.site}: ${r.assigned.length} assigned${r.assigned.length ? ` (${r.assigned.join(", ")})` : ""}.${r.refused.length ? `\nRefused: ${r.refused.join("; ")}.` : ""}${r.warned.length ? `\nWarnings: ${r.warned.join("; ")}.` : ""}`, brief_ar: `${r.site}: تم تعيين ${r.assigned.length}، رفض ${r.refused.length}.` };
+  },
+});
+
+const issue_credit_note = def({
+  name: "issue_credit_note",
+  description: "Issue a drafted credit or debit note to the client with its ZATCA QR. Always needs Finance approval.",
+  schema: z.object({ ref: z.string().regex(/^(CN|DN)-\d{2}-\d{3}$/) }),
+  async run(ctx, i) {
+    const r = await issueCreditNote(ctx.session, i.ref);
+    if (!r.ok) return { error: "cannot_issue", brief_en: r.error, brief_ar: r.error };
+    return { ...r, brief_en: `${r.ref} issued (${fmtSAR(r.total, "en", 2)}). It shows on the client's statement of account.`, brief_ar: `تم إصدار ${r.ref}.` };
+  },
+});
+
+export const TOOLS = { claim_status, statement_summary, open_ticket, competency_check, assign_crew, issue_credit_note, list_findings, raise_finding, hse_summary, document_status, handover_status, project_status, my_signoffs, raise_instruction, reconcile_materials, plan_dispatch, approve_dispatch_plan, draft_invoices, issue_invoice, estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
 export type ToolName = keyof typeof TOOLS;
 
 export function toolSpecs(names: readonly ToolName[]) {

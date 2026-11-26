@@ -3,6 +3,7 @@ import type { Session } from "./auth";
 import { one, rows, withSystem, withUser, type Db } from "./db";
 import { requiredSigners, stagePct, STAGES, type ServiceLine } from "./service-lines";
 import { activateWarranties, advanceArea } from "./quality";
+import { onClaimCertified } from "./commercial";
 
 /* Projects (contracts), delivery tracking and the client sign-off engine. Reads run under RLS as the user. */
 
@@ -191,6 +192,7 @@ async function applySignoff(db: Db, so: Signoff & { org_id: string }, status: "a
       values ($1,$2,$3,$4,$5,$6,'ncr','itp','high',$7,$8,'client', current_date + 3)`, [st.org_id, st.client_company_id, st.project_id, st.area_id, so.entity_id, ref, `${st.code}: ${st.title} rejected at client witness`, comment]);
     return `Rejected. ${ref} raised for RGS to correct.`;
   }
+  if (so.kind === "claim" && so.entity_id) return onClaimCertified(db, so.entity_id, status);
   if (so.kind === "completion" && so.project_id && status === "approved") {
     await db.query("update projects set status = 'completed' where id = $1", [so.project_id]);
     await activateWarranties(db, so.project_id);
