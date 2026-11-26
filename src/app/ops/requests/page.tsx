@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Card, Mono, PageHeader, Pill, statusTone, Table, Td } from "@/components/ui";
 import { requireSession } from "@/lib/auth";
@@ -17,8 +18,8 @@ export default async function Page() {
           <Table head={[t("cols.ref"), t("cols.title"), t("cols.client"), t("cols.source"), t("cols.priority"), t("cols.requiredBy"), t("cols.status"), "Quote"]}>
             {reqs.map((r) => (
               <tr key={r.id}>
-                <Td><Mono>{r.ref}</Mono></Td>
-                <Td className="max-w-[320px]"><div className="font-medium">{r.title}</div>{r.site_code && <div className="text-xs text-muted"><Mono>{r.site_code}</Mono></div>}</Td>
+                <Td><Link href={`/ops/requests/${r.id}`} className="hover:text-brand"><Mono>{r.ref}</Mono></Link></Td>
+                <Td className="max-w-[320px]"><Link href={`/ops/requests/${r.id}`} className="font-medium hover:text-brand">{r.title}</Link>{r.site_code && <div className="text-xs text-muted"><Mono>{r.site_code}</Mono></div>}</Td>
                 <Td className="max-w-[200px] text-muted">{L(r, "client", l)}</Td>
                 <Td><Pill>{t(`types.${r.source}`)}</Pill></Td>
                 <Td><Pill tone={statusTone(r.priority)}>{t(`status.${r.priority}`)}</Pill></Td>
@@ -33,7 +34,7 @@ export default async function Page() {
           <Table head={[t("cols.ref"), t("cols.client"), "Request", t("cols.status"), t("cols.total"), t("cols.valid"), ""]}>
             {quotes.map((q) => (
               <tr key={q.id}>
-                <Td><Mono>{q.ref}</Mono></Td>
+                <Td><Link href={`/ops/quotes/${q.id}`} className="hover:text-brand"><Mono>{q.ref}</Mono></Link></Td>
                 <Td className="text-muted">{L(q, "client", l)}</Td>
                 <Td>{q.request_ref ? <Mono>{q.request_ref}</Mono> : "—"}</Td>
                 <Td><Pill tone={statusTone(q.status)}>{t(`status.${q.status}`)}</Pill></Td>

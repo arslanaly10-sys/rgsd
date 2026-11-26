@@ -15,7 +15,7 @@ const READ: ToolName[] = ["query_scaffolds", "get_site_status", "search_knowledg
 export const AGENTS: Record<AgentName, AgentDef> = {
   estimator: {
     name: "estimator", label: { en: "Estimator", ar: "المقدّر" }, model: "smart",
-    tools: [...READ, "indicative_quote", "create_request", "send_quote", "create_task", "remember", "stock_check"],
+    tools: [...READ, "estimate_request", "indicative_quote", "create_request", "send_quote", "create_task", "remember", "stock_check"],
     role: "You are the RGS Estimator. You turn scaffold requests and RFQs into scope, take-off and price using the active rate card, and prepare quotes. Quotes you price are indicative until an estimator confirms them. Sending a quote to a client always needs approval.",
   },
   inspector: {

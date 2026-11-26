@@ -61,6 +61,8 @@ function plan(text: string, tools: Set<string>, agent: string): Plan {
   const add = (name: string, input: Record<string, unknown> = {}) => tools.has(name) && p.push({ name, input });
   const status = /\bred\b|أحمر|حمراء/i.test(text) ? "red" : /\byellow\b|أصفر|صفراء/i.test(text) ? "yellow" : /\bgreen\b|أخضر|خضراء/i.test(text) ? "green" : undefined;
 
+  const reqRef = text.match(/\bRQ-\d{2}-\d{4}\b/i)?.[0]?.toUpperCase();
+  if (reqRef && /estimate|quote|price|draft|take.?off|سعّر|سعر|عرض/i.test(text)) { add("estimate_request", { request_ref: reqRef }); if (p.length) return p; }
   if (/send\s+(the\s+)?quote|أرسل\s+العرض/i.test(text) && quoteRef) { add("send_quote", { quote_ref: quoteRef }); return p; }
   if (/(set|change|mark|clear|update|remove|lift).{0,20}tag|tag.{0,12}(to|as)\s+(green|yellow|red)|غي[ّ]?ر.{0,10}البطاقة|أزل.{0,10}البطاقة/i.test(text) && tag) {
     const target = (text.match(/\b(?:to|as)\s+(green|yellow|red)\b/i)?.[1]?.toLowerCase()) ?? (/clear|remove|lift|أزل|إزالة/i.test(text) ? "green" : status ?? "green");

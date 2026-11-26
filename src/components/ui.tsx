@@ -78,10 +78,10 @@ export function statusTone(status: string): keyof typeof pillTones {
   return "neutral";
 }
 
-export function Table({ head, children, empty }: { head: ReactNode[]; children: ReactNode; empty?: string }) {
+export function Table({ head, children, empty, minWidth = 640 }: { head: ReactNode[]; children: ReactNode; empty?: string; minWidth?: number }) {
   return (
     <div className="-mx-4 overflow-x-auto">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full text-sm" style={{ minWidth }}>
         <thead>
           <tr className="border-b border-line text-start">
             {head.map((h, i) => (
@@ -114,4 +114,22 @@ export function DueLabel({ days, t }: { days: number | null; t: (k: string, v?: 
 export function ButtonLink({ href, children, variant = "primary" }: { href: string; children: ReactNode; variant?: "primary" | "ghost" }) {
   const cls = variant === "primary" ? "bg-brand text-white hover:bg-brand-600" : "border border-line bg-panel text-ink hover:bg-canvas";
   return <Link href={href} className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition ${cls}`}>{children}</Link>;
+}
+
+export function Flash({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  const ok = msg.startsWith("ok:");
+  return <div role="status" className={`mb-4 rounded-lg px-4 py-3 text-sm ${ok ? "bg-tag-green-bg text-tag-green" : "bg-tag-red-bg text-tag-red"}`}>{msg.slice(msg.indexOf(":") + 1)}</div>;
+}
+
+export function Confidence({ value }: { value: number | string | null }) {
+  if (value == null) return null;
+  const v = Math.round(Number(value) * 100);
+  const tone = v >= 75 ? "text-tag-green" : v >= 55 ? "text-tag-yellow" : "text-tag-red";
+  return (
+    <span className="inline-flex items-center gap-2 text-xs">
+      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-line"><span className={`block h-full bg-current ${tone}`} style={{ width: `${v}%` }} /></span>
+      <span className={`font-semibold tabular ${tone}`}>{v}%</span>
+    </span>
+  );
 }

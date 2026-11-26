@@ -32,6 +32,7 @@ const liveProvider: Provider = {
         // Our block types mirror the Messages API exactly.
         messages: req.messages as unknown as Anthropic.MessageParam[],
         tools: req.tools as unknown as Anthropic.Tool[] | undefined,
+        ...(req.toolChoice ? { tool_choice: req.toolChoice } : {}),
       });
       return {
         content: res.content.filter((b) => b.type === "text" || b.type === "tool_use") as CompletionResponse["content"],

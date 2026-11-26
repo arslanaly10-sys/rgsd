@@ -444,6 +444,7 @@ async function main() {
     ["create_task", 1, staffAll, [], [], "Create a task or reminder"],
     ["remember", 1, staffAll, [], [], "Save client or site memory"],
     ["create_request", 1, everyone, [], [], "Log a client scaffold request"],
+    ["estimate_request", 1, ["admin", "ops_manager", "estimator"], [], [], "Run the Estimator workflow and save a draft quote"],
     ["indicative_quote", 1, everyone, [], [], "Instant indicative price for a request (not binding)"],
     ["request_off_hire", 2, everyone, ["ops_manager", "yard_logistics"], ["ops_manager", "yard_logistics"], "Request collection of material from a site"],
     ["reserve_stock", 2, ["admin", "ops_manager", "yard_logistics", "estimator"], ["ops_manager", "yard_logistics"], ["ops_manager", "yard_logistics"], "Reserve yard stock for a job"],

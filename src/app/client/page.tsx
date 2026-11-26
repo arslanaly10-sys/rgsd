@@ -45,7 +45,7 @@ export default async function ClientHome() {
           <ul className="grid gap-2 text-sm">{o.reqs.map((r) => <li key={r.ref} className="flex justify-between gap-2"><span className="min-w-0 truncate"><Mono>{r.ref}</Mono> {r.title}</span><Pill tone={statusTone(r.status)}>{t(`status.${r.status}`)}</Pill></li>)}</ul>
         </Card>
         <Card title={t("client.openQuotes")}>
-          <ul className="grid gap-2 text-sm">{o.quotes.length ? o.quotes.map((q) => <li key={q.ref} className="flex justify-between gap-2"><span><Mono>{q.ref}</Mono> <span className="text-xs text-muted">{fmtDate(q.valid_until, l)}</span></span><span className="tabular font-medium">{fmtSAR(q.total, l)}</span></li>) : <li className="text-muted">{t("app.none")}</li>}</ul>
+          <ul className="grid gap-2 text-sm">{o.quotes.length ? o.quotes.map((q) => <li key={q.ref} className="flex justify-between gap-2"><span><Link href={`/client/quotes/${q.id}`} className="text-brand"><Mono>{q.ref}</Mono></Link> <span className="text-xs text-muted">{fmtDate(q.valid_until, l)}</span></span><span className="tabular font-medium">{fmtSAR(q.total, l)}</span></li>) : <li className="text-muted">{t("app.none")}</li>}</ul>
         </Card>
         <Card title={t("client.invoices")}>
           <ul className="grid gap-2 text-sm">{o.invoices.map((i) => <li key={i.ref} className="flex justify-between gap-2"><span><Mono>{i.ref}</Mono> <Pill tone={statusTone(i.status)}>{t(`status.${i.status}`)}</Pill></span><span className="tabular font-medium">{fmtSAR(i.total, l)}</span></li>)}</ul>

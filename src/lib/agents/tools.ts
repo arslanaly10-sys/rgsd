@@ -3,9 +3,12 @@ import { z } from "zod";
 import type { Session } from "@/lib/auth";
 import { one, rows, withSystem, withUser } from "@/lib/db";
 import { daysUntil, fmtNum, fmtSAR } from "@/lib/format";
+import { estimateRequest } from "@/lib/workflows/estimate";
+import { activeRates, price, SCAFFOLD_TYPES, Scope, takeoff } from "@/lib/estimating";
 import { expiries, onHireBySite, opsKpis, scaffolds, siteSummaries, stockByYard } from "@/lib/queries";
 
-export type ToolCtx = { session: Session; runId: string; locale: "en" | "ar" };
+/** runId is null when an action starts from the interface rather than from an agent run. */
+export type ToolCtx = { session: Session; runId: string | null; locale: "en" | "ar" };
 export type ToolOutput = { brief_en: string; brief_ar: string; [k: string]: unknown };
 
 type ToolDef<S extends z.ZodObject> = {
@@ -16,7 +19,7 @@ type ToolDef<S extends z.ZodObject> = {
 };
 
 const def = <S extends z.ZodObject>(t: ToolDef<S>) => t;
-const actor = (ctx: ToolCtx) => ({ id: ctx.session.id, actorKind: "agent" as const, runId: ctx.runId });
+const actor = (ctx: ToolCtx) => ({ id: ctx.session.id, actorKind: "agent" as const, runId: ctx.runId ?? undefined });
 
 const siteCode = z.string().regex(/^[A-Z]{3}$/).describe("Three-letter site code, e.g. SDR, KRN, BRG").optional();
 
@@ -233,38 +236,19 @@ const indicative_quote = def({
     weeks: z.number().int().min(1).max(104), offshore: z.boolean().optional(), site_code: siteCode,
   }),
   async run(ctx, i) {
-    // Rates are internal (RLS hides them from clients), so read the rate card as the system and only return the computed price.
-    const rates = await withSystem((db) => rows<{ code: string; description: string; description_ar: string; unit: string; rate: string }>(db,
-      `select ri.code, ri.description, ri.description_ar, ri.unit, ri.rate from rate_items ri join rate_cards rc on rc.id = ri.rate_card_id where rc.org_id = $1 and rc.active`, [ctx.session.orgId]));
-    const r = (code: string) => rates.find((x) => x.code === code)!;
-    const lines: { code: string; description: string; description_ar: string; qty: number; unit: string; rate: number; amount: number }[] = [];
-    const add = (code: string, qty: number) => { const x = r(code); if (!x) return; lines.push({ code, description: x.description, description_ar: x.description_ar, qty: Math.round(qty * 100) / 100, unit: x.unit, rate: Number(x.rate), amount: Math.round(qty * Number(x.rate) * 100) / 100 }); };
-    const volume = Math.max(20, i.length_m * i.width_m * i.height_m);
-    const sys = /cuplock|ringlock|system|tower/.test(i.scaffold_type);
-    if (i.scaffold_type === "mast_climber" || i.scaffold_type === "hoist") {
-      add(i.scaffold_type === "hoist" ? "RNT-HST" : "RNT-MC", Math.max(1, Math.ceil(i.weeks / 4.33)));
-      add("LAB-SUP", 4);
-    } else {
-      add(sys ? "ERC-SYS" : "ERC-TC", volume);
-      add(sys ? "DSM-SYS" : "DSM-TC", volume);
-      add("RNT-M3W", volume * i.weeks);
-      add("INS-7D", i.weeks);
-      if (i.scaffold_type === "cantilever" || i.scaffold_type === "suspended") add("DES-CALC", 1);
-    }
-    add(i.offshore ? "MOB-OFF" : "MOB-ON", 2);
-    if (i.offshore) {
-      const labour = lines.filter((l) => /^(ERC|DSM)/.test(l.code)).reduce((a, l) => a + l.amount, 0);
-      const up = r("UPL-OFF");
-      lines.push({ code: "UPL-OFF", description: up.description, description_ar: up.description_ar, qty: Number(up.rate), unit: "pct", rate: Math.round(labour) / 100, amount: Math.round(labour * Number(up.rate)) / 100 });
-    }
-    const subtotal = Math.round(lines.reduce((a, l) => a + l.amount, 0) * 100) / 100;
-    const vat = Math.round(subtotal * 0.15 * 100) / 100;
-    const linesEn = lines.map((l) => `• ${l.description}: ${l.unit === "pct" ? `${l.qty}%` : `${fmtNum(l.qty, "en", 1)} ${l.unit}`} → ${fmtSAR(l.amount, "en")}`).join("\n");
-    const linesAr = lines.map((l) => `• ${l.description_ar}: ${fmtSAR(l.amount, "ar")}`).join("\n");
+    // Rates are internal (RLS hides them from clients): the engine reads them as the system and only the computed price is returned.
+    const scope = Scope.parse({
+      items: [{ description: `${i.scaffold_type.replace(/_/g, " ")} ${i.length_m}×${i.width_m}×${i.height_m} m`, scaffold_type: (SCAFFOLD_TYPES as readonly string[]).includes(i.scaffold_type) ? i.scaffold_type : "tube_coupler", length_m: i.length_m, width_m: i.width_m, height_m: i.height_m }],
+      hire_weeks: i.weeks, offshore: !!i.offshore, site_code: i.site_code, confidence: 0.5,
+    });
+    const to = await takeoff(ctx.session.orgId, scope);
+    const p = price(scope, to, await activeRates(ctx.session.orgId));
+    const linesEn = p.lines.map((l) => `• ${l.description}: ${l.unit === "lot" ? "" : `${fmtNum(l.qty, "en", 1)} ${l.unit} → `}${fmtSAR(l.amount, "en")}`).join("\n");
+    const linesAr = p.lines.map((l) => `• ${l.description_ar}: ${fmtSAR(l.amount, "ar")}`).join("\n");
     return {
-      indicative: true, sample_rates: true, volume_m3: Math.round(volume), lines, subtotal, vat, total: subtotal + vat,
-      brief_en: `Indicative price for ${i.scaffold_type.replace(/_/g, " ")} ${i.length_m} × ${i.width_m} × ${i.height_m} m (${Math.round(volume)} m³) for ${i.weeks} week(s)${i.offshore ? ", offshore" : ""}:\n${linesEn}\nSubtotal ${fmtSAR(subtotal, "en")} + VAT 15% ${fmtSAR(vat, "en")} = **${fmtSAR(subtotal + vat, "en")}**.\nIndicative only, based on SAMPLE rates. An RGS estimator confirms the firm quote after checking drawings and access.`,
-      brief_ar: `سعر مبدئي لسقالة ${i.length_m} × ${i.width_m} × ${i.height_m} م (${Math.round(volume)} م³) لمدة ${i.weeks} أسبوع${i.offshore ? "، بحري" : ""}:\n${linesAr}\nالمجموع ${fmtSAR(subtotal, "ar")} + ضريبة 15% ${fmtSAR(vat, "ar")} = **${fmtSAR(subtotal + vat, "ar")}**.\nسعر مبدئي بأسعار تجريبية. يؤكد المقدّر العرض النهائي بعد مراجعة المخططات.`,
+      indicative: true, sample_rates: true, volume_m3: to.volume_m3, weight_kg: to.total_weight_kg, lines: p.lines, subtotal: p.subtotal, vat: p.vat, total: p.total,
+      brief_en: `Indicative price for ${i.scaffold_type.replace(/_/g, " ")} ${i.length_m} × ${i.width_m} × ${i.height_m} m (${to.volume_m3} m³, about ${fmtNum(to.total_weight_kg / 1000, "en", 1)} t of material) for ${i.weeks} week(s)${i.offshore ? ", offshore" : ""}:\n${linesEn}\nSubtotal ${fmtSAR(p.subtotal, "en")} + VAT 15% ${fmtSAR(p.vat, "en")} = **${fmtSAR(p.total, "en")}**.\nIndicative only, based on SAMPLE rates. An RGS estimator confirms the firm quote after checking drawings and access.`,
+      brief_ar: `سعر مبدئي لسقالة ${i.length_m} × ${i.width_m} × ${i.height_m} م (${to.volume_m3} م³) لمدة ${i.weeks} أسبوع${i.offshore ? "، بحري" : ""}:\n${linesAr}\nالمجموع ${fmtSAR(p.subtotal, "ar")} + ضريبة 15% ${fmtSAR(p.vat, "ar")} = **${fmtSAR(p.total, "ar")}**.\nسعر مبدئي بأسعار تجريبية. يؤكد المقدّر العرض النهائي بعد مراجعة المخططات.`,
     };
   },
 });
@@ -285,7 +269,7 @@ const request_off_hire = def({
                       values ($1,$2,$3,$4,'yard_logistics', current_date + 2, 'high', 'agent', 'site', $5)`,
         [ctx.session.orgId, site.client_company_id, `Collect off-hired material from ${site.code}${i.sku ? ` (${i.sku})` : ""}`, `استلام المواد المنتهي إيجارها من ${site.code}`, site.id]);
       return r.rowCount ?? 0;
-    }, { runId: ctx.runId, actorId: ctx.session.id });
+    }, { runId: ctx.runId ?? undefined, actorId: ctx.session.id });
     return { lines_updated: n, brief_en: `Off-hire requested for ${n} line(s) at ${site.code}. Yard & Logistics has a collection task due in 2 days.`, brief_ar: `تم طلب إنهاء الإيجار لـ ${n} بند في ${site.code}. لدى فريق الساحة مهمة استلام خلال يومين.` };
   },
 });
@@ -299,9 +283,10 @@ const send_quote = def({
     if (!q) return { error: "not_found", brief_en: `Quote ${i.quote_ref} not found.`, brief_ar: `العرض ${i.quote_ref} غير موجود.` };
     await withSystem(async (db) => {
       await db.query("update quotes set status='sent', approved_by = coalesce(approved_by, $2) where id = $1", [q.id, ctx.session.id]);
+      await db.query("update requests set status='quoted' where id = (select request_id from quotes where id = $1) and status in ('new','triage','estimating')", [q.id]);
       await db.query("insert into channel_messages (org_id, client_company_id, channel, direction, subject, body) values ($1,$2,'email','out',$3,$4)",
         [ctx.session.orgId, q.client_company_id, `Quotation ${i.quote_ref}`, `Please find quotation ${i.quote_ref} (total ${fmtSAR(q.total, "en", 2)}) in your RGS portal.`]);
-    }, { runId: ctx.runId, actorId: ctx.session.id });
+    }, { runId: ctx.runId ?? undefined, actorId: ctx.session.id });
     return { brief_en: `Quote ${i.quote_ref} sent to the client and visible in their portal.`, brief_ar: `تم إرسال العرض ${i.quote_ref} إلى العميل.` };
   },
 });
@@ -316,12 +301,31 @@ const set_tag_status = def({
     await withSystem((db) => db.query(
       `update scaffolds set status = $2, restrictions = $3, last_inspected_at = case when $2 = 'green' then now() else last_inspected_at end,
               next_inspection_due = case when $2 in ('green','yellow') then current_date + 7 else next_inspection_due end where id = $1`,
-      [s.id, i.status, i.status === "yellow" ? i.restrictions ?? "Restricted use, see tag" : null]), { runId: ctx.runId, actorId: ctx.session.id });
+      [s.id, i.status, i.status === "yellow" ? i.restrictions ?? "Restricted use, see tag" : null]), { runId: ctx.runId ?? undefined, actorId: ctx.session.id });
     return { from: s.status, to: i.status, brief_en: `${i.tag_no} changed from ${s.status} to ${i.status}. Next inspection due in 7 days.`, brief_ar: `تم تغيير ${i.tag_no} من ${tagAr[s.status]} إلى ${tagAr[i.status]}.` };
   },
 });
 
-export const TOOLS = { query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
+const estimate_request = def({
+  name: "estimate_request",
+  description: "Run the Estimator workflow on a logged request: read its RFQ/drawings, extract scope, do the material take-off and stock check, price it and save a DRAFT quote for an estimator to review. Does not send anything to the client.",
+  schema: z.object({ request_ref: z.string().regex(/^RQ-\d{2}-\d{4}$/) }),
+  async run(ctx, i) {
+    const r = await withUser(actor(ctx), (db) => one<{ id: string }>(db, "select id from requests where ref = $1", [i.request_ref]));
+    if (!r) return { error: "not_found", brief_en: `Request ${i.request_ref} not found.`, brief_ar: `الطلب ${i.request_ref} غير موجود.` };
+    const res = await estimateRequest(ctx.session.orgId, r.id, ctx.session.id);
+    if (!res.quote) return { error: "workflow_failed", detail: res.error, brief_en: `The estimate for ${i.request_ref} stopped: ${res.error ?? res.status}. It will retry automatically.`, brief_ar: `توقف التسعير للطلب ${i.request_ref} وسيُعاد تلقائياً.` };
+    const q = await withUser(actor(ctx), (db) => one<{ questions: string[]; ai_confidence: string }>(db, "select questions, ai_confidence from quotes where id = $1", [res.quote!.quoteId]));
+    const qs = q?.questions ?? [];
+    return {
+      quote_id: res.quote.quoteId, quote_ref: res.quote.ref, total: res.quote.total, link: `/ops/quotes/${res.quote.quoteId}`,
+      brief_en: `Draft ${res.quote.ref} ready for ${i.request_ref}: ${fmtSAR(res.quote.total, "en")} incl. VAT, confidence ${Math.round(Number(q?.ai_confidence ?? 0) * 100)}%. Review it at /ops/quotes/${res.quote.quoteId}.${qs.length ? `\nAsk the client first:\n${qs.map((x) => `• ${x}`).join("\n")}` : ""}`,
+      brief_ar: `المسودة ${res.quote.ref} جاهزة للطلب ${i.request_ref}: ${fmtSAR(res.quote.total, "ar")} شامل الضريبة. راجعها قبل الإرسال.`,
+    };
+  },
+});
+
+export const TOOLS = { estimate_request, query_scaffolds, get_site_status, search_knowledge, list_expiring, stock_check, onhire_summary, daily_brief, create_task, remember, create_request, indicative_quote, request_off_hire, send_quote, set_tag_status };
 export type ToolName = keyof typeof TOOLS;
 
 export function toolSpecs(names: readonly ToolName[]) {

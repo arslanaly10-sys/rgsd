@@ -18,6 +18,8 @@ export type CompletionRequest = {
   messages: Message[];
   tools?: ToolSpec[];
   maxTokens?: number;
+  /** Force a specific tool (structured extraction). */
+  toolChoice?: { type: "tool"; name: string };
   /** Extra hints for the mock provider (ignored by real models). */
   mockHints?: { agent: string; locale: "en" | "ar" };
 };

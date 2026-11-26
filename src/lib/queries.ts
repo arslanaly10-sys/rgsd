@@ -98,7 +98,7 @@ export async function siteOptions(s: Session) {
 
 export type RequestRow = {
   id: string; ref: string; title: string; source: string; status: string; priority: string; required_by: string | null; created_at: string;
-  client: string; client_ar: string | null; site_code: string | null; quote_ref: string | null; quote_status: string | null; quote_total: string | null;
+  client: string; client_ar: string | null; site_code: string | null; quote_id: string | null; quote_ref: string | null; quote_status: string | null; quote_total: string | null;
 };
 
 export async function requestsList(s: Session) {
@@ -106,10 +106,10 @@ export async function requestsList(s: Session) {
     rows<RequestRow>(
       db,
       `select r.id, r.ref, r.title, r.source, r.status, r.priority, r.required_by, r.created_at, c.name client, c.name_ar client_ar, si.code site_code,
-              q.ref quote_ref, q.status quote_status, q.total quote_total
+              q.id quote_id, q.ref quote_ref, q.status quote_status, q.total quote_total
        from requests r join client_companies c on c.id = r.client_company_id
        left join sites si on si.id = r.site_id
-       left join lateral (select ref, status, total from quotes where request_id = r.id order by version desc, created_at desc limit 1) q on true
+       left join lateral (select id, ref, status, total from quotes where request_id = r.id order by version desc, created_at desc limit 1) q on true
        order by case r.status when 'new' then 0 when 'triage' then 1 when 'estimating' then 2 else 3 end, r.required_by nulls last`,
     ),
   );
@@ -251,7 +251,7 @@ export async function inspectionRound(s: Session) {
 
 export async function clientOverview(s: Session) {
   return withUser(s, async (db) => {
-    const quotes = await rows<{ ref: string; status: string; total: string; valid_until: string | null }>(db, "select ref, status, total, valid_until from quotes order by created_at desc limit 5");
+    const quotes = await rows<{ id: string; ref: string; status: string; total: string; valid_until: string | null }>(db, "select id, ref, status, total, valid_until from quotes order by created_at desc limit 5");
     const invoices = await rows<{ ref: string; status: string; total: string; due_date: string | null }>(db, "select ref, status, total, due_date from invoices order by created_at desc limit 5");
     const reqs = await rows<{ ref: string; title: string; status: string; required_by: string | null }>(db, "select ref, title, status, required_by from requests order by created_at desc limit 5");
     return { quotes, invoices, reqs };

@@ -94,7 +94,7 @@ export async function decideApproval(approver: Session, id: string, decision: "a
   const claimed = await withSystem((db) => db.query("update approval_requests set status='approved', decided_by=$2, decided_at=now(), decision_note=$3 where id=$1 and status='pending'", [id, approver.id, note ?? null]));
   if (!claimed.rowCount) throw new Error("Someone else already decided this");
   const requester = a.requested_by ? await getSessionById(a.requested_by) : null;
-  const ctx: ToolCtx = { session: requester ?? approver, runId: a.run_id ?? crypto.randomUUID(), locale: approver.locale };
+  const ctx: ToolCtx = { session: requester ?? approver, runId: a.run_id, locale: approver.locale };
   const tool = (TOOLS as Record<string, (typeof TOOLS)[ToolName]>)[a.tool];
   try {
     const out = await tool.run(ctx, tool.schema.parse(a.payload.input) as never);
