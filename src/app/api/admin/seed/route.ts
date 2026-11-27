@@ -9,6 +9,12 @@ export const maxDuration = 300;
  * Requires ALLOW_SEED=1 and Authorization: Bearer SEED_SECRET, and refuses if any organization already exists.
  * Remove ALLOW_SEED after use.
  */
+export async function GET(req: Request) {
+  // Same one-time load, for tools that can only open a URL: ?secret=SEED_SECRET (still requires ALLOW_SEED=1 and an empty database).
+  const secret = new URL(req.url).searchParams.get("secret") ?? "";
+  return POST(new Request(req.url, { method: "POST", headers: { authorization: `Bearer ${secret}` } }));
+}
+
 export async function POST(req: Request) {
   if (process.env.ALLOW_SEED !== "1" || !process.env.SEED_SECRET || req.headers.get("authorization") !== `Bearer ${process.env.SEED_SECRET}`) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
